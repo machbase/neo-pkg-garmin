@@ -1,0 +1,37 @@
+// 러닝 추세 — 월평균 페이스(이동 시간 기준)와 평균 심박.
+// 같은 페이스에서 심박이 내려가면 같은 운동을 더 편하게 하게 된 것이다.
+// 축은 분 단위 소수(6.5 = 6분 30초)로 두고, 점마다 m:ss 글자를 붙였다.
+// (chartOption 은 JS 소스 그대로 브라우저로 가므로 축 formatter 함수로 m:ss 를 쓸 수도 있다)
+// 기간 : 기본은 최근 1년. ?from=…&to=… (예: 2025-09-30 00:00:00) 로 고정할 수 있다.
+SQL(`select
+       to_char(time, 'YYYY-MM') as m,
+       avg(case when name = 'run_pace' then value end) as pace,
+       avg(case when name = 'run_hr' then value end) as hr
+     from garmin.sys.metric
+     where name in ('run_pace', 'run_hr') and time >= ? and time < ?
+     group by m order by m`, param('from') ?? time('now-365d'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Running · Pace and Heart Rate by Month" },
+    tooltip: { trigger: "axis" },
+    legend: { data: ["Pace (min/km)", "Avg heart rate (bpm)"], top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 40 },
+    xAxis: { type: "category", data: column(0) },
+    yAxis: [
+      // 두 선이 겹치지 않게 페이스는 위쪽, 심박은 아래쪽에 오도록 범위를 잡았다
+      { type: "value", name: "min/km", min: 4, max: 7, interval: 0.5 },
+      { type: "value", name: "bpm", min: 110, max: 200 }
+    ],
+    series: [
+      { name: "Pace (min/km)", type: "line", symbolSize: 9, lineStyle: { width: 3, color: "#91cc75" }, itemStyle: { color: "#91cc75" },
+        data: column(1).map(function (s) {
+          const m = Math.floor(s / 60), r = Math.round(s % 60)
+          return { value: Math.round(s / 60 * 100) / 100, label: { show: true, position: "bottom", formatter: m + ":" + (r < 10 ? "0" : "") + r } }
+        }) },
+      { name: "Avg heart rate (bpm)", type: "line", yAxisIndex: 1, symbolSize: 9, lineStyle: { width: 3, color: "#ee6666" }, itemStyle: { color: "#ee6666" },
+        label: { show: true, position: "top" },
+        data: column(2).map(function (v) { return Math.round(v) }) }
+    ]
+  })
+)

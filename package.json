@@ -1,0 +1,14 @@
+{
+    "name": "neo-pkg-garmin",
+    "version": "0.3.8",
+    "description": "Garmin Health — collects your own Garmin Connect data (heart rate, stress, Body Battery, steps, activities with 1-second streams) into machbase-neo and shows it as TQL dashboards. Unofficial; not affiliated with Garmin.",
+    "minServerVersion": "8.7.1",
+    "scripts": {
+        "install": "./scripts/install.js",
+        "start": "./scripts/start.js",
+        "stop": "./scripts/stop.js",
+        "uninstall": "./scripts/uninstall.js"
+    },
+    "dependencies": {},
+    "private": true
+}

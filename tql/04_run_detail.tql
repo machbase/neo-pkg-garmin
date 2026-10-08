@@ -1,0 +1,40 @@
+// 러닝 상세 — 1초 간격 스트림. 시계열 DB 의 강점이 가장 잘 드러나는 화면이다.
+// 기본은 가장 최근 러닝. ?at=YYYY-MM-DD HH24:MI:SS 를 주면 그 시각 이전의 마지막 러닝을 그린다 (예: ?at=2026-09-26 23:59:59).
+// act_hr 에는 모든 활동(수영 포함)이 들어 있으므로 러닝 구간(span)의 시작·끝으로 좁힌다.
+//
+// 두 번에 나눠 묻는다 (SCRIPT + $.db().query). "그 시각 이전 마지막 러닝" 을 바인드 값이 든 스칼라 서브쿼리로 한 번에 물으면
+// 같은 SQL 문장은 첫 실행의 서브쿼리 결과를 계속 쓴다 — ?at 을 바꿔도 화면이 안 바뀐다 (machbase-neo 8.7.1, docs/DEVELOPMENT.md).
+// SCRIPT 는 ECMA5 만 된다 (화살표 함수 · ?? · 템플릿 문자열 불가).
+SCRIPT({
+  var run = null;
+  $.db().query("select begin_time, end_time from garmin.sys.span where kind = 'activity' and label in ('running', 'indoor_running')" +
+               " and begin_time <= ? order by begin_time desc limit 1", $.params.at || "2100-01-01 00:00:00")
+    .forEach(function (r) { run = r; });
+  if (run) {
+    $.db().query("select rollup('min', 1, time) as t, round(avg(value), 0) from garmin.sys.metric" +
+                 " where name = 'act_hr' and time between ? and ? group by t order by t", run[0], run[1])
+      .forEach(function (r) { $.yieldArray([r[0], r[1]]); });
+  }
+})
+CHART(
+  size("100%", "460px"),
+  chartOption({
+    title: { text: "Running Heart Rate · " + (function () {
+      const t = column(0)
+      const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
+      return t.length ? d(t[0]) : "no run"
+    })() + " (1-min avg of 1-sec samples)" },
+    tooltip: { trigger: "axis" },
+    legend: { top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 70 },   // 아래는 확대 막대 자리
+    dataZoom: [{ type: "inside" }, { type: "slider", bottom: 10 }],
+    xAxis: { type: "time" },
+    yAxis: { type: "value", name: "bpm", min: 90 },
+    series: [{
+      name: "Heart rate", type: "line", smooth: true, showSymbol: false,
+      lineStyle: { width: 2, color: "#91cc75" },
+      itemStyle: { color: "#91cc75" },
+      data: column(0).map(function (t, i) { return [t, column(1)[i]] })
+    }]
+  })
+)

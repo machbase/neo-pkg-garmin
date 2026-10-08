@@ -1,0 +1,26 @@
+// VO2max — 러닝마다 가민이 추정한 값. 49 이상·45 이하인 점에만 값을 적는다 (같은 값이 이어지면 첫 점에만).
+// 기간 : 기본은 최근 1년. ?from=…&to=… (예: 2025-09-30 00:00:00) 로 고정할 수 있다.
+SQL(`select time, value from garmin.sys.metric where name = 'run_vo2max' and time >= ? and time < ? order by time`,
+    param('from') ?? time('now-365d'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Running · VO2max per Run (Garmin estimate)", subtext: "the line breaks where there was no run for 30+ days" },
+    tooltip: { trigger: "axis" },
+    legend: { top: 58, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 120, bottom: 40 },  // 부제·범례가 축 이름과 겹치지 않게
+    xAxis: { type: "time" },
+    yAxis: { type: "value", name: "ml/kg/min", min: 42, max: 52 },
+    series: [{
+      name: "VO2max", type: "line", symbolSize: 8, lineStyle: { width: 2, color: "#5470c6" }, itemStyle: { color: "#5470c6" },
+      // 러닝이 30일 넘게 없던 구간은 선을 잇지 않는다 — 그 사이 값이 있었던 것처럼 보이지 않게
+      data: column(0).reduce(function (out, t, i) {
+        const v = column(1)[i]
+        const repeat = i > 0 && column(1)[i - 1] === v
+        if (i > 0 && t - column(0)[i - 1] > 30 * 86400e3) out.push({ value: [(t + column(0)[i - 1]) / 2, null] })
+        out.push({ value: [t, v], label: { show: (v >= 49 || v <= 45) && !repeat, position: v >= 49 ? "top" : "bottom", formatter: String(v) } })
+        return out
+      }, [])
+    }]
+  })
+)

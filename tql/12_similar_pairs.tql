@@ -1,0 +1,82 @@
+// 비슷한 러닝 짝 — "그때와 지금" 의 두 러닝이 운 좋게 고른 한 쌍이 아님을 보인다.
+// 앞 구간 러닝과 뒤 구간 러닝을 짝지어, 거리가 ±10% · 1km 페이스가 ±10초 안인 쌍을 모두 그린다.
+// 기간 : 기본은 최근 1년, 앞 구간은 앞 1/3 · 뒤 구간은 뒤 1/3. ?from=…&to=…&early=…(앞 구간 끝)&late=…(뒤 구간 시작)
+// 한 줄이 한 쌍이고, 주황 점이 앞쪽 러닝, 파란 점이 뒤쪽 러닝의 평균 심박이다 (run_hr). 화살표는 앞 → 뒤 — 심박이 어느 쪽으로 변했는지 보인다.
+// 거리는 span.detail 의 dist= 에만 있다 (숫자 컬럼이 없다). 그래서 metric 값을 글자로 바꿔 span 과 한 질의로 잇는다.
+SQL(`select * from (
+       select time as t, name as k, to_char(value) as v from garmin.sys.metric
+         where name in ('run_pace', 'run_hr') and time >= ? and time < ?
+       union all
+       select begin_time as t, 'detail' as k, detail as v from garmin.sys.span
+         where kind = 'activity' and label = 'running' and begin_time >= ? and begin_time < ?
+     ) order by t`, param('from') ?? time('now-365d'), param('to') ?? time('now'), param('from') ?? time('now-365d'), param('to') ?? time('now'))
+MAPVALUE(3, param('early') ?? "")
+MAPVALUE(4, param('late') ?? "")
+MAPVALUE(5, param('from') ?? "")
+MAPVALUE(6, param('to') ?? "")
+CHART(
+  size("100%", "560px"),
+  chartOption({ ...(function () {
+    // 날짜 도우미 — 이 브라우저의 시간대. ?from·?to·?early·?late 는 "YYYY-MM-DD" 나 "YYYY-MM-DD HH24:MI:SS"
+    // (질의는 neo 서버 시간대로 읽힌다 — 브라우저와 서버가 같은 시간대라고 본다)
+    const DAY = 86400e3
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const p2 = function (n) { return String(n).padStart(2, "0") }
+    const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
+    const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
+    const TO = parse(column(6)[0]) || Date.now(), FROM = parse(column(5)[0]) || TO - 365 * DAY
+    const EARLY = [FROM, parse(column(3)[0]) || FROM + (TO - FROM) / 3], LATE = [parse(column(4)[0]) || TO - (TO - FROM) / 3, TO]
+    const day = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
+    const runs = {}
+    column(0).forEach(function (t, i) {
+      const r = runs[t] = runs[t] || { t: t, day: day(t) }
+      const k = column(1)[i], v = column(2)[i]
+      if (k === "detail") { const m = /dist=(\d+)/.exec(v); if (m) r.dist = Number(m[1]) } else r[k] = Number(v)
+    })
+    const list = Object.values(runs).filter(function (r) { return r.dist && r.run_pace && r.run_hr })
+    const inside = function (r, p) { return r.t >= p[0] && r.t < p[1] }
+    const pairs = []
+    list.filter(function (r) { return inside(r, EARLY) }).forEach(function (e) {
+      list.filter(function (r) { return inside(r, LATE) }).forEach(function (l) {
+        if (Math.abs(l.dist - e.dist) / e.dist <= 0.10 && Math.abs(l.run_pace - e.run_pace) <= 10) pairs.push([e, l])
+      })
+    })
+    const lower = pairs.filter(function (p) { return p[1].run_hr < p[0].run_hr }).length
+    // 왼쪽 글자는 표처럼 세 칸 — 앞 러닝 날짜(주황) · 뒤 러닝 날짜(파랑) · 거리. 색을 점과 맞춰 어느 날짜가 어느 점인지 보이게 한다
+    // (두 날짜와 거리를 한 줄로 이어 쓰면 알아보기 어렵다). 칸 이름은 y 축 이름으로 맨 위에 둔다
+    const fmt = function (d) { return MON[Number(d.slice(5, 7)) - 1] + " " + Number(d.slice(8)) + ", " + d.slice(0, 4) }
+    const rows = pairs.map(function (p, i) { return String(i) })   // 칸 값은 쌍 번호, 글자는 formatter 가 만든다
+    const cell = function (c) { return { width: c[0], align: c[1], color: c[2], fontSize: 14 } }
+    const RICH = { e: cell([104, "left", "#e8743b"]), l: cell([104, "left", "#2f6fdb"]), k: cell([56, "right", "#555"]) }
+    const HEAD = { e: cell([104, "left", "#888"]), l: cell([104, "left", "#888"]), k: cell([56, "right", "#888"]) }
+    const describe = function (i) { const p = pairs[i]; return fmt(p[0].day) + " → " + fmt(p[1].day) + " · " + (p[0].dist / 1000).toFixed(1) + " km" }
+    return {
+      title: { text: lower + " of " + pairs.length + " Similar Pairs: Lower Heart Rate on the Later Run",
+               subtext: "Earlier: " + mY(EARLY[0]) + " – " + mY(EARLY[1] - 1) + " · Later: " + mY(LATE[0]) + " – " + mY(LATE[1] - 1) + " · distance within ±10% · pace within ±10 s/km · arrow = earlier → later" },
+      tooltip: { trigger: "item", formatter: function (x) { return describe(Number(x.value[1])) + "<br>" + x.seriesName + " · " + x.value[0] + " bpm" } },
+      legend: { top: 58, left: 5, textStyle: { fontSize: 13 }, data: ["Earlier run", "Later run"] },
+      grid: { top: 130, left: 300, right: 80, bottom: 40 },
+      xAxis: { type: "value", name: "avg bpm", min: 120, max: 160 },
+      yAxis: { type: "category", data: rows, inverse: true,
+               name: "{e|Earlier run}{l|Later run}{k|Distance}", nameLocation: "start", nameGap: 14,
+               nameTextStyle: { align: "right", padding: [0, 8, 0, 0], rich: HEAD },
+               axisLabel: { formatter: function (v) { const p = pairs[Number(v)]; return "{e|" + fmt(p[0].day) + "}{l|" + fmt(p[1].day) + "}{k|" + (p[0].dist / 1000).toFixed(1) + " km}" }, rich: RICH } },
+      series: [
+        { name: "Earlier run", type: "scatter", symbolSize: 16, itemStyle: { color: "#e8743b" },
+          // 숫자는 두 점의 바깥쪽에 적는다 (보통 앞쪽 심박이 높아 오른쪽에 온다)
+          data: pairs.map(function (p, i) { return { value: [p[0].run_hr, rows[i]], label: { position: p[0].run_hr >= p[1].run_hr ? "right" : "left" } } }),
+          label: { show: true, formatter: function (x) { return x.value[0] }, color: "#e8743b", fontSize: 15 },
+          // 앞 → 뒤 화살표. 선이 두 점을 덮지 않게 양 끝을 점 반지름쯤(0.45 bpm) 줄인다 — 화살촉이 뒤 러닝 점 가장자리에 닿는다. 심박이 같으면 긋지 않는다
+          markLine: { symbol: ["none", "arrow"], symbolSize: 13, silent: true, lineStyle: { color: "#8a94a3", width: 3, type: "solid" },
+                      data: pairs.filter(function (p) { return p[0].run_hr !== p[1].run_hr }).map(function (p) {
+                        const a = p[0].run_hr, b = p[1].run_hr, row = rows[pairs.indexOf(p)]
+                        const r = a > b ? 0.45 : -0.45
+                        return [{ coord: [a - r, row] }, { coord: [b + r, row] }]
+                      }) } },
+        { name: "Later run", type: "scatter", symbolSize: 16, itemStyle: { color: "#2f6fdb" },
+          data: pairs.map(function (p, i) { return { value: [p[1].run_hr, rows[i]], label: { position: p[0].run_hr >= p[1].run_hr ? "left" : "right" } } }),
+          label: { show: true, formatter: function (x) { return x.value[0] }, color: "#2f6fdb", fontSize: 15 } }
+      ]
+    }
+  })() })
+)

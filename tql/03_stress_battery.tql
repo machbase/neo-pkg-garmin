@@ -1,0 +1,48 @@
+// 스트레스와 Body Battery — 같은 날 두 지표를 겹쳐 본다.
+// 1년치를 15분 단위로 그리면 빽빽해 읽을 수 없어서 하루로 좁힌다.
+// 기간 : 기본은 최근 24시간. ?from=…&to=… 로 고른 날을 본다 (예: ?from=2026-09-28 00:00:00&to=2026-09-28 23:59:59).
+// 시계를 차지 않은 시간(밤 등)은 기록이 없다. 30분 넘게 비면 선을 끊는다 — 매끈한 선이 빈 곳에 가짜 곡선을 그리지 않게
+// 롤업 질의에는 case when 을 못 쓰므로 원본(3분 간격)을 받아 화면에서 나눈다.
+SQL(`select time, name, value
+     from garmin.sys.metric
+     where name in ('stress', 'body_battery')
+       and time >= ? and time <= ?
+     order by time`, param('from') ?? time('now-24h'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({ ...(function () {
+    // 지표 하나를 고르고 30분 넘는 빈틈에 null 을 넣는다
+    const pick = function (name) {
+      const out = []
+      let prev = null
+      column(0).forEach(function (t, i) {
+        if (column(1)[i] !== name) return
+        if (prev !== null && t - prev > 30 * 60e3) out.push([t - 1, null])
+        out.push([t, column(2)[i]]); prev = t
+      })
+      return out
+    }
+    return {
+    title: { text: "Stress · Body Battery · " + (function () {
+      const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
+      const t = column(0)
+      if (!t.length) return "no data"
+      const a = d(t[0]), b = d(t[t.length - 1])
+      return a === b ? a : a + " – " + b
+    })() },
+    tooltip: { trigger: "axis" },
+    legend: { data: ["Stress", "Body Battery"], top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 40 },
+    xAxis: { type: "time" },
+    yAxis: { type: "value", name: "score", min: 0, max: 100 },
+    series: [
+      { name: "Stress", type: "line", smooth: true, showSymbol: false,
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2, color: "#fac858" }, itemStyle: { color: "#fac858" },
+        data: pick("stress") },
+      { name: "Body Battery", type: "line", smooth: true, showSymbol: false,
+        lineStyle: { width: 3, color: "#5470c6" }, itemStyle: { color: "#5470c6" },
+        data: pick("body_battery") }
+    ]
+    }
+  })() })
+)

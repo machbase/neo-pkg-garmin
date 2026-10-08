@@ -1,0 +1,85 @@
+// 페이스와 심박 — 야외 러닝 하나가 점 하나. 색이 짙을수록 최근이다.
+// 기간 : 기본은 최근 1년. ?from=…&to=… 로 고정할 수 있다.
+// 월평균은 달마다 표본 수가 달라 튀므로 러닝마다 찍는다.
+// 같은 페이스대를 띠로 칠하고, 앞 구간(?early 전)과 뒤 구간(?late 이후)의 평균 심박을 띠 안에 짧은 선으로 긋는다.
+// 두 평균의 값은 범례에 적는다 — 선 끝에 적었더니 두 값이 가까우면 글자가 겹쳤다.
+//   ?band=375-405 : 띠(초/km, 6:15~6:45). 기본은 페이스 중앙값 ±15초. ?band=0 이면 띠를 끈다 (화면의 same-pace band 체크박스와 같다)
+//   ?early · ?late : 기본은 기간의 앞 1/3 · 뒤 1/3
+// run_pace · run_hr 은 활동 시작 시각에 함께 적혀 있어 시각으로 묶는다.
+SQL(`select time,
+       max(case when name = 'run_pace' then value end) as pace,
+       max(case when name = 'run_hr' then value end) as hr
+     from garmin.sys.metric
+     where name in ('run_pace', 'run_hr')
+       and time >= ? and time < ?
+     group by time order by time`, param('from') ?? time('now-365d'), param('to') ?? time('now'))
+MAPVALUE(3, param('band') ?? "")
+MAPVALUE(4, param('early') ?? "")
+MAPVALUE(5, param('late') ?? "")
+MAPVALUE(6, param('from') ?? "")
+MAPVALUE(7, param('to') ?? "")
+CHART(
+  size("100%", "560px"),
+  chartOption({ ...(function () {
+    // 날짜 도우미 — 이 브라우저의 시간대. ?from·?to·?early·?late 는 "YYYY-MM-DD" 나 "YYYY-MM-DD HH24:MI:SS"
+    // (질의는 neo 서버 시간대로 읽힌다 — 브라우저와 서버가 같은 시간대라고 본다)
+    const DAY = 86400e3
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const p2 = function (n) { return String(n).padStart(2, "0") }
+    const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
+    const ymd = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
+    const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
+    const mdY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() }
+    const TO = parse(column(7)[0]) || Date.now(), FROM = parse(column(6)[0]) || TO - 365 * DAY
+    const BEFORE = parse(column(4)[0]) || FROM + (TO - FROM) / 3, SINCE = parse(column(5)[0]) || TO - (TO - FROM) / 3
+    const bandArg = String(column(3)[0] || "")
+    const showBand = bandArg !== "0"
+    const paces = column(1).slice().sort(function (a, b) { return a - b })
+    const med = paces.length ? paces[Math.floor(paces.length / 2)] : 390
+    const m = /^(\d+)-(\d+)$/.exec(bandArg)
+    const BAND = m ? [Number(m[1]), Number(m[2])] : [Math.round(med - 15), Math.round(med + 15)]
+    const mmss = function (s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
+    const pts = column(0).map(function (t, i) { return [column(1)[i] / 60, column(2)[i], t] })
+    const avg = function (from, to) {
+      const v = column(0).map(function (t, i) { return [t, column(1)[i], column(2)[i]] })
+        .filter(function (r) { return r[1] >= BAND[0] && r[1] <= BAND[1] && r[0] >= from && r[0] < to })
+      return { n: v.length, hr: Math.round(v.reduce(function (s, r) { return s + r[2] }, 0) / v.length) }
+    }
+    const before = avg(0, BEFORE), since = avg(SINCE, Infinity)
+    const x0 = BAND[0] / 60, x1 = BAND[1] / 60
+    // 띠 안의 평균 심박 — 선 하나가 시리즈 하나라 범례에 이름(구간 · 심박 · 횟수)이 나온다
+    const avgLine = function (a, color, text) {
+      return { name: text + " · " + a.hr + " bpm (" + a.n + " runs)", type: "line", data: [[x0, a.hr], [x1, a.hr]], showSymbol: false, z: 5,
+               lineStyle: { color: color, width: 5 }, itemStyle: { color: color }, tooltip: { formatter: function (p) { return p.seriesName } } }
+    }
+    const RUN = "Outdoor run"
+    const series = [{
+      name: RUN, type: "scatter", symbolSize: 16, data: pts,
+      itemStyle: { borderColor: "#fff", borderWidth: 1 },
+      tooltip: { formatter: function (p) { return ymd(p.value[2]) + "<br>" + mmss(p.value[0] * 60) + " /km · " + p.value[1] + " bpm" } }
+    }]
+    if (showBand) {
+      series[0].markArea = { silent: true, itemStyle: { color: "rgba(250, 200, 88, 0.22)" },
+                             label: { position: "insideTop", formatter: "same pace band " + mmss(BAND[0]) + "–" + mmss(BAND[1]) + " /km", fontSize: 16, color: "#9a6b00" },
+                             data: [[{ xAxis: x0 }, { xAxis: x1 }]] }
+      if (before.n) series.push(avgLine(before, "#5b8fd6", "before " + mY(BEFORE)))
+      if (since.n) series.push(avgLine(since, "#0b2e6b", "since " + mY(SINCE)))
+    }
+    return {
+      title: { text: "Running · Pace vs Average Heart Rate",
+               subtext: "One dot per outdoor run · darker = more recent · " + mdY(FROM) + " – " + mdY(TO - 1) },
+      tooltip: { trigger: "item" },
+      legend: { top: 58, left: 5, textStyle: { fontSize: 13 },
+                data: series.map(function (s, i) { return i ? s.name : { name: s.name, itemStyle: { color: "#3f6bb0" } } }) },
+      grid: { top: 120, right: 40, bottom: 50 },
+      // 색 막대(오래된 → 최근)는 범례 줄 오른쪽에 눕힌다
+      visualMap: { type: "continuous", dimension: 2, seriesIndex: 0, min: column(0)[0], max: column(0)[column(0).length - 1],
+                   orient: "horizontal", right: 30, top: 58, itemWidth: 12, itemHeight: 140, calculable: false,
+                   text: [column(0).length ? mY(column(0)[column(0).length - 1]) : "", column(0).length ? mY(column(0)[0]) : ""], inRange: { color: ["#cfe0f5", "#0b2e6b"] } },
+      xAxis: { type: "value", name: "pace (min/km)", nameLocation: "middle", nameGap: 32, min: 5, max: 8, interval: 0.25,
+               axisLabel: { formatter: function (v) { return mmss(v * 60) } } },
+      yAxis: { type: "value", name: "avg bpm", min: 110, max: 170 },
+      series: series
+    }
+  })() })
+)

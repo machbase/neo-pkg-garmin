@@ -1,0 +1,79 @@
+// 1년 캘린더 — 칸은 하루 걸음 수, 점은 그날 한 운동.
+// 기간 : 기본은 최근 1년. ?from=…&to=… (to 는 그 시각 전까지).
+// 기간을 반씩 두 줄로 나눠 칸을 키웠다. 걸음은 회색으로 칠하고 색은 운동 점에만 쓴다. 점은 종목마다 자리가 정해져 있다 (수영 왼쪽 · 러닝 가운데 · 그 밖 오른쪽).
+// 걸음은 metric 에서, 운동은 span 에서 읽어 한 번의 질의로 잇는다 (union all).
+SQL(`select 'steps' as k, to_char(time, 'YYYY-MM-DD') as day, max(value) as v from garmin.sys.metric
+       where name = 'steps' and time >= ? and time < ?
+       group by day
+     union all
+     select label as k, to_char(begin_time, 'YYYY-MM-DD') as day, count(*) * 1.0 as v from garmin.sys.span
+       where kind = 'activity' and begin_time >= ? and begin_time < ?
+       group by label, day`, param('from') ?? time('now-365d'), param('to') ?? time('now'), param('from') ?? time('now-365d'), param('to') ?? time('now'))
+// 기간을 차트 JS 로 넘긴다 (줄 나누기 · 부제)
+MAPVALUE(3, param('from') ?? "")
+MAPVALUE(4, param('to') ?? "")
+CHART(
+  size("100%", "640px"),
+  chartOption({ ...(function () {
+    // 날짜 도우미 — 이 브라우저의 시간대. ?from·?to·?early·?late 는 "YYYY-MM-DD" 나 "YYYY-MM-DD HH24:MI:SS"
+    // (질의는 neo 서버 시간대로 읽힌다 — 브라우저와 서버가 같은 시간대라고 본다)
+    const DAY = 86400e3
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const p2 = function (n) { return String(n).padStart(2, "0") }
+    const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
+    const ymd = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
+    const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
+    const mdY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() }
+    const TO = parse(column(4)[0]) || Date.now(), FROM = parse(column(3)[0]) || TO - 365 * DAY
+    // 가운데 날이 든 달의 1일에서 나눈다 (2025-09-30 ~ 2026-09-30 이면 3/31 까지 · 4/1 부터)
+    const midDay = ymd(FROM + (TO - FROM) / 2)
+    const SPLIT = parse(midDay.slice(0, 8) + "01")
+    const halves = [[ymd(FROM), ymd(SPLIT - DAY)], [ymd(SPLIT), ymd(TO - 1)]]
+    const half = function (day) { return day <= halves[0][1] ? 0 : 1 }
+    const kinds = [
+      { name: "Swim", color: "#2f6fdb", dx: -14, match: function (l) { return l === "lap_swimming" } },
+      { name: "Run", color: "#1f9d55", dx: 0, match: function (l) { return l === "running" || l === "indoor_running" } },
+      { name: "Indoor cycling", color: "#f08a24", dx: 14, match: function (l) { return l === "indoor_cycling" } },
+      { name: "Other", color: "#8e44ad", dx: 14, match: function () { return true } }
+    ]
+    const steps = [[], []], dots = kinds.map(function () { return [[], []] })
+    column(0).forEach(function (k, i) {
+      const day = column(1)[i], v = column(2)[i]
+      if (k === "steps") { steps[half(day)].push([day, v]); return }
+      const j = kinds.findIndex(function (x) { return x.match(k) })
+      if (!dots[j][half(day)].some(function (d) { return d[0] === day })) dots[j][half(day)].push([day, 1])
+    })
+    const series = []
+    halves.forEach(function (h, c) {
+      series.push({ name: "Steps", type: "heatmap", coordinateSystem: "calendar", calendarIndex: c, data: steps[c] })
+    })
+    kinds.forEach(function (x, j) {
+      if (!dots[j][0].length && !dots[j][1].length) return   // 없는 종목은 범례에도 내지 않는다
+      halves.forEach(function (h, c) {
+        series.push({ name: x.name, type: "scatter", coordinateSystem: "calendar", calendarIndex: c,
+                      symbolSize: 13, symbolOffset: [x.dx, 0], data: dots[j][c],
+                      itemStyle: { color: x.color, borderColor: "#fff", borderWidth: 1 } })
+      })
+    })
+    // 칸 크기는 판 크기에 맞춘다 (위아래 경계를 주고 cellSize 는 auto)
+    const cal = function (h, top, bottom) {
+      return { range: h, top: top, bottom: bottom, left: 70, right: 30, cellSize: ["auto", "auto"],
+               splitLine: { lineStyle: { color: "#5b6573", width: 1.5 } },
+               itemStyle: { color: "#fff", borderColor: "#e3e7ed", borderWidth: 1 },
+               yearLabel: { show: false }, dayLabel: { nameMap: "en", firstDay: 1, fontSize: 14 },
+               monthLabel: { nameMap: "en", fontSize: 18 } }
+    }
+    return {
+      title: { text: "One Year · Daily Steps and Workouts",
+               subtext: mdY(FROM) + " – " + mdY(TO - 1) + " · cell = steps that day · dot = a workout that day" },
+      tooltip: { formatter: function (p) { return p.seriesName === "Steps" ? p.value[0] + " · " + p.value[1] + " steps" : p.value[0] + " · " + p.seriesName } },
+      legend: { top: 58, left: 5, textStyle: { fontSize: 13 }, data: kinds.filter(function (x, j) { return dots[j][0].length || dots[j][1].length }).map(function (x) { return x.name }) },
+      visualMap: { type: "continuous", seriesIndex: [0, 1], min: 0, max: 20000, calculable: false,
+                   orient: "horizontal", right: 30, top: 58, itemWidth: 12, itemHeight: 140,
+                   text: ["20k+ steps", "0"], inRange: { color: ["#f6f6f6", "#c9c9c9", "#7d7d7d"] } },
+      // 위 105px 은 제목·부제·범례. 두 판의 높이가 틀 높이(약 450~650px)에서 비슷하게 나뉘도록 잡았다
+      calendar: [cal(halves[0], 105, "45%"), cal(halves[1], "62%", 8)],
+      series: series
+    }
+  })() })
+)

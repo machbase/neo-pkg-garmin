@@ -1,0 +1,38 @@
+// 하루 심박 추이 — 2분 간격 원본을 10분 롤업으로 집계한다.
+// 시계를 차지 않은 시간(밤 등)은 기록이 없다. 30분 넘게 비면 선을 끊는다 — 매끈한 선이 빈 곳에 가짜 곡선을 그리지 않게
+// 기간 : 기본은 최근 24시간. ?from=…&to=… 로 고른 날을 본다 (예: ?from=2026-09-28 00:00:00&to=2026-09-28 23:59:59).
+SQL(`select
+       rollup('min', 10, time) as t,
+       round(avg(value), 0) as hr
+     from garmin.sys.metric
+     where name = 'hr'
+       and time >= ? and time <= ?
+     group by t order by t`, param('from') ?? time('now-24h'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Heart Rate · " + (function () {
+      const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
+      const t = column(0)
+      if (!t.length) return "no data"
+      const a = d(t[0]), b = d(t[t.length - 1])
+      return a === b ? a : a + " – " + b
+    })() + " (10-min avg)" },
+    tooltip: { trigger: "axis" },
+    legend: { top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 40 },
+    xAxis: { type: "time" },
+    yAxis: { type: "value", name: "bpm", min: 40 },
+    series: [{
+      name: "Heart rate", type: "line", smooth: true, showSymbol: false,
+      areaStyle: { opacity: 0.15 },
+      lineStyle: { width: 2, color: "#ee6666" },
+      itemStyle: { color: "#ee6666" },
+      data: column(0).reduce(function (out, t, i) {
+        if (i > 0 && t - column(0)[i - 1] > 30 * 60e3) out.push([t - 1, null])
+        out.push([t, column(1)[i]])
+        return out
+      }, [])
+    }]
+  })
+)

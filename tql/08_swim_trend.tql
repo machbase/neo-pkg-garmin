@@ -1,0 +1,38 @@
+// 수영 추세 — 월평균 100m 페이스(이동 시간 기준)와 평균 심박.
+// 100m 에 3분 20초(200초)보다 느린 기록은 드릴·짧은 기록으로 보고 페이스 평균에서 뺀다.
+// SWOLF 는 25m·50m 수영장이 섞여 월평균이 튀므로 여기서 그리지 않는다.
+// 물속 손목 광학 심박은 오차가 크다 — 부제로 밝힌다.
+// 기간 : 기본은 최근 1년. ?from=…&to=… (예: 2025-09-30 00:00:00) 로 고정할 수 있다.
+SQL(`select
+       to_char(time, 'YYYY-MM') as m,
+       avg(case when name = 'swim_pace' and value < 200 then value end) as pace,
+       avg(case when name = 'swim_hr' then value end) as hr
+     from garmin.sys.metric
+     where name in ('swim_pace', 'swim_hr') and time >= ? and time < ?
+     group by m order by m`, param('from') ?? time('now-365d'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Swimming · Pace and Heart Rate by Month",
+             subtext: "pace excludes sessions slower than 3:20 /100m · wrist heart rate in water is approximate" },
+    tooltip: { trigger: "axis" },
+    grid: { top: 120, bottom: 40 },  // 부제·범례가 축 이름과 겹치지 않게
+    legend: { data: ["Pace (sec/100m)", "Avg heart rate (bpm)"], top: 58, left: 5, textStyle: { fontSize: 13 } },
+    xAxis: { type: "category", data: column(0) },
+    yAxis: [
+      // 두 선이 겹치지 않게 페이스는 위쪽, 심박은 아래쪽에 오도록 범위를 잡았다
+      { type: "value", name: "sec/100m", min: 40, max: 140 },
+      { type: "value", name: "bpm", min: 100, max: 200 }
+    ],
+    series: [
+      { name: "Pace (sec/100m)", type: "line", symbolSize: 9, lineStyle: { width: 3, color: "#5470c6" }, itemStyle: { color: "#5470c6" },
+        data: column(1).map(function (s) {
+          const m = Math.floor(s / 60), r = Math.round(s % 60)
+          return { value: Math.round(s), label: { show: true, position: "bottom", formatter: m + ":" + (r < 10 ? "0" : "") + r } }
+        }) },
+      { name: "Avg heart rate (bpm)", type: "line", yAxisIndex: 1, symbolSize: 9, lineStyle: { width: 3, color: "#ee6666" }, itemStyle: { color: "#ee6666" },
+        label: { show: true, position: "top" },
+        data: column(2).map(function (v) { return Math.round(v) }) }
+    ]
+  })
+)

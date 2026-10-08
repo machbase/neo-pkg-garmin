@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garmin</title>
+<!-- 앱 탭 화면 (neo-web 은 main.html 이 있어야 패키지 탭을 연다).
+     로그인 전 : 가민 로그인 카드 (이메일 · 비밀번호 · MFA 코드). 비밀번호는 가린 칸으로 받고 저장하지 않는다 (cgi-bin/src/signin.js).
+     로그인 뒤 : 대시보드(tql/*.tql) 목록과 차트 한 장.
+     neo-web 은 패키지 화면을 iframe 으로 띄우고 테마를 넘기지 않는다 — 색은 neo-web 새 탭의 Graphite 톤을 옮겨 적었다 (coin-collector 와 같다). -->
+<style>
+  :root { color-scheme: dark; --bg: #252525; --surface: #2c2c2c; --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.18);
+          --text: #e6e6e6; --muted: #9a9a9a; --tone: #6d8bff; --tone-hover: #8aa1ff; --bad: #ef6b6b; --warn: #c9a14a; }
+  [hidden] { display: none !important; }        /* main { display: grid } 이 hidden 속성을 이기지 않게 */
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.5 "Pretendard", system-ui, sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header b { font-size: 14px; font-weight: 600; }
+  #state { color: var(--muted); }
+  #state.warn { color: var(--warn); }
+  header .sp { flex: 1; }
+  button { font: inherit; cursor: pointer; }
+  .ghost { border: 1px solid var(--line-strong); background: transparent; color: var(--text); border-radius: 4px; padding: 4px 12px; }
+  .ghost:hover { background: rgba(255,255,255,.06); }
+  main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+  nav { border-right: 1px solid var(--line); overflow: auto; padding: 8px; }
+  nav button { display: block; width: 100%; text-align: left; padding: 7px 10px; margin: 0 0 2px; border: 0; border-radius: 4px;
+               background: transparent; color: var(--text); }
+  nav button:hover { background: rgba(255,255,255,.05); }
+  nav button.on { background: var(--surface); color: #fff; box-shadow: inset 2px 0 0 var(--tone); }
+  .viewer { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+  /* 기간 막대 */
+  #bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  #bar .lbl { color: var(--muted); font-size: 12px; }
+  #bar .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  #bar .seg button { border: 0; background: transparent; color: var(--text); padding: 4px 10px; }
+  #bar .seg button + button { border-left: 1px solid var(--line-strong); }
+  #bar .seg button.on { background: var(--tone); color: #0b0f1f; }
+  #bar input[type=date] { width: auto; padding: 3px 6px; color-scheme: dark; }
+  #bar label.chk { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: 12px; }
+  #bar label.chk input { width: auto; }
+
+  /* 로그인 카드 */
+  #signin { display: none; place-items: center; padding: 24px; overflow: auto; }
+  .card { width: 360px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .card p { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+  label { display: block; margin: 12px 0 4px; color: var(--muted); font-size: 12px; }
+  input { box-sizing: border-box; width: 100%; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line-strong);
+          background: #1f1f1f; color: var(--text); font: inherit; }
+  input:focus { outline: none; border-color: var(--tone); }
+  .primary { width: 100%; margin-top: 16px; padding: 8px; border: 0; border-radius: 4px; background: var(--tone); color: #0b0f1f; font-weight: 600; }
+  .primary:hover:not(:disabled) { background: var(--tone-hover); }
+  .primary:disabled { opacity: .5; cursor: default; }
+  .msg { min-height: 18px; margin-top: 12px; font-size: 12px; color: var(--bad); }
+  .msg.info { color: var(--muted); }
+  .fine { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+  .link { border: 0; background: none; color: var(--tone); padding: 0; margin-top: 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Garmin Health</b><span id="state">…</span><span class="sp"></span>
+  <button class="ghost" id="signout" hidden>Sign out</button>
+</header>
+
+<main id="dash" hidden>
+  <nav id="list"></nav>
+  <div class="viewer">
+    <div id="bar"></div>
+    <iframe id="view" title="dashboard"></iframe>
+  </div>
+</main>
+
+<section id="signin">
+  <div class="card">
+    <form id="step1" autocomplete="on">
+      <h2>Sign in to Garmin Connect</h2>
+      <p>Use your own Garmin account. This server collects your data every hour.</p>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" id="go" type="submit">Sign in</button>
+      <div class="msg" id="msg1"></div>
+    </form>
+    <form id="step2" hidden autocomplete="off">
+      <h2>Enter the verification code</h2>
+      <p id="mfaHint">Garmin sent a code to you.</p>
+      <label for="code">Code</label>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+      <button class="primary" id="go2" type="submit">Verify</button>
+      <div class="msg" id="msg2"></div>
+      <button class="link" id="restart" type="button">Start over</button>
+    </form>
+    <div class="fine">
+      Your password is sent to Garmin's sign-in service only and is <b>not stored</b>. Only a sign-in token is kept on this
+      machbase-neo server (readable by its administrators). Unofficial tool, not affiliated with Garmin. Using it may be against
+      Garmin's terms and could limit your account — use it with your own account at your own risk.
+    </div>
+  </div>
+</section>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const API = 'cgi-bin/api/'
+  // neo 로그인 토큰을 본문에 넣는다 — CGI 에는 Authorization 헤더가 넘어가지 않는다 (cgi-bin/src/cgi.js neoUser)
+  const neoToken = () => { try { return localStorage.getItem('accessToken') || '' } catch (e) { return '' } }
+  const call = (api, body) => fetch(API + api, { method: 'POST', cache: 'no-store', body: JSON.stringify(Object.assign({ neo: neoToken() }, body || {})) }).then((r) => r.json())
+  const post = (body) => call('signin', body)
+  const at = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  // 실패 사유 -> 안내 문구 (가민 쪽 메시지는 그대로 보이지 않는다 — 계정 정보가 섞일 수 있다)
+  function reasonText(r) {
+    switch (r.reason) {
+      case 'neo_auth': return 'Your machbase-neo session has expired. Reload the page.'
+      case 'invalid_input': return 'Check the email and password.'
+      case 'sign_in_failed': return 'Garmin did not accept the email or password.' + left(r)
+      case 'bad_code': return 'That code did not work.' + left(r)
+      case 'expired': return 'The code request expired. Sign in again.'
+      case 'locked': return 'Too many attempts. Try again after ' + at(r.lockedUntil) + '.'
+      case 'rate_limited': return 'Garmin is limiting sign-ins for now. Try again after ' + at(r.lockedUntil) + '.'
+      case 'oauth1_failed': case 'oauth2_failed': return 'Signed in, but Garmin did not issue a token. Try again later.'
+      default: return 'Something went wrong. Try again later.'
+    }
+  }
+  const left = (r) => (r.lockedUntil ? ' Sign-in is paused until ' + at(r.lockedUntil) + '.' : '')
+
+  function busy(btn, on, label) { btn.disabled = on; btn.textContent = on ? 'Please wait…' : label }
+
+  $('step1').onsubmit = (e) => {
+    e.preventDefault()
+    const pw = $('password')
+    busy($('go'), true, 'Sign in'); $('msg1').textContent = ''
+    post({ action: 'start', email: $('email').value, password: pw.value })
+      .then((r) => {
+        pw.value = ''                                     // 화면에도 남기지 않는다
+        if (r.ok && r.mfa) {
+          $('mfaHint').textContent = 'Garmin sent a code by ' + (r.method === 'phone' ? 'text message' : 'email') + '. Enter it within 5 minutes.'
+          $('step1').hidden = true; $('step2').hidden = false; $('code').focus()
+        } else if (r.ok) done()
+        else $('msg1').textContent = reasonText(r)
+      })
+      .catch(() => { pw.value = ''; $('msg1').textContent = 'Could not reach this server.' })
+      .finally(() => busy($('go'), false, 'Sign in'))
+  }
+  $('step2').onsubmit = (e) => {
+    e.preventDefault()
+    busy($('go2'), true, 'Verify'); $('msg2').textContent = ''
+    post({ action: 'mfa', code: $('code').value })
+      .then((r) => {
+        if (r.ok) done()
+        else {
+          $('msg2').textContent = reasonText(r)
+          if (r.reason === 'expired' || r.reason === 'locked' || r.reason === 'rate_limited') setTimeout(restart, 2500)
+        }
+      })
+      .catch(() => { $('msg2').textContent = 'Could not reach this server.' })
+      .finally(() => busy($('go2'), false, 'Verify'))
+  }
+  function restart() { $('code').value = ''; $('msg2').textContent = ''; $('step2').hidden = true; $('step1').hidden = false }
+  $('restart').onclick = restart
+
+  $('signout').onclick = () => {
+    if (!confirm('Sign out? The collector stops until you sign in again. Collected data stays in the database.')) return
+    post({ action: 'signout' }).then(() => location.reload())
+  }
+
+  function done() {
+    $('msg1').className = 'msg info'
+    $('msg1').textContent = 'Signed in. Collection starts within a minute.'
+    setTimeout(() => location.reload(), 1200)
+  }
+
+  // ── 대시보드 ──────────────────────────────────────────────────────────────
+  // 패키지 안의 tql/ 폴더. 패키지가 /public/<이름>/ 에 있으므로 /db/tql/public/<이름>/tql/<파일> 로 연다
+  const BASE = '/db/tql' + location.pathname.replace(/\/[^/]*$/, '') + '/tql/'
+  // 차트마다 받는 기간 인자 (tql 파일 머리 주석과 같다)
+  //   range : ?from=&to= (to 는 그날 전까지)   day : 하루 ?from=&to=   run : ?at= (그날까지의 마지막 러닝)   pair : ?a=&b=   band : 11 의 띠
+  const DASHBOARDS = [
+    ['01_daily_overview', 'Daily steps · resting HR', 'range'],
+    ['02_hr_today', 'Heart rate (one day)', 'day'],
+    ['03_stress_battery', 'Stress · Body Battery', 'day'],
+    ['04_run_detail', 'Run detail (1-sec)', 'run'],
+    ['05_activities_monthly', 'Activities per month', 'range'],
+    ['06_run_trend', 'Running trend', 'range'],
+    ['07_vo2max', 'VO2max', 'range'],
+    ['08_swim_trend', 'Swimming trend', 'range'],
+    ['09_then_and_now', 'Then and now', 'pair'],
+    ['10_year_calendar', 'One-year calendar', 'range'],
+    ['11_pace_hr', 'Pace vs heart rate', 'range band'],
+    ['12_similar_pairs', 'Similar run pairs', 'range'],
+  ]
+  const DAY = 86400e3
+  const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 10)   // 이 브라우저 시간대의 날짜
+  const today = () => iso(new Date())
+  const addDays = (s, n) => iso(new Date(new Date(s + 'T00:00:00').getTime() + n * DAY))
+  // 기간 상태 — 차트를 바꿔도 유지한다
+  const P = { preset: 365, from: addDays(today(), -365), to: today(), day: today(), at: today(), a: addDays(today(), -365), b: today(), band: true }
+
+  function query(kind) {
+    const q = {}
+    if (/range/.test(kind)) { q.from = P.from; q.to = addDays(P.to, 1) }
+    if (kind === 'day') { q.from = P.day + ' 00:00:00'; q.to = P.day + ' 23:59:59' }
+    if (kind === 'run') q.at = P.at + ' 23:59:59'
+    if (kind === 'pair') { q.a = P.a + ' 00:00:00'; q.b = P.b + ' 23:59:59' }
+    if (/band/.test(kind) && !P.band) q.band = '0'
+    return new URLSearchParams(q).toString()
+  }
+
+  let current = null
+  function draw() { $('view').src = BASE + current[0] + '.tql?' + query(current[2]) }
+  // 차트는 TQL 에 적힌 높이(420px 등)로 그려진다. 같은 출처라 그린 뒤 틀에 꼭 맞춘다.
+  // TQL 차트 페이지는 body 가 100vh 인데 위에 30px 여백과 기본 margin 이 더해져 늘 스크롤이 생기고, 아래(범례)가 잘린다 (8.7.1)
+  const FIT_CSS = 'html,body{margin:0!important;width:100%!important;height:100%!important;overflow:hidden!important}' +
+    '.chart_container{margin:0!important;height:100%!important;padding:10px 14px 6px;box-sizing:border-box}' +
+    '.chart_item{width:100%!important;height:100%!important;margin:0!important}'
+  function fit() {
+    try {
+      const w = $('view').contentWindow, d = w.document, el = d.querySelector('.chart_item')
+      if (!el || !w.echarts) return
+      if (!d.getElementById('fit-css')) { const s = d.createElement('style'); s.id = 'fit-css'; s.textContent = FIT_CSS; d.head.appendChild(s) }
+      const c = w.echarts.getInstanceByDom(el); if (c) c.resize()
+    } catch (e) { /* 다른 출처면 그대로 둔다 */ }
+  }
+  $('view').addEventListener('load', () => { fit(); setTimeout(fit, 400) })
+  window.addEventListener('resize', fit)
+
+  function dateInput(key, onchange) {
+    const i = document.createElement('input'); i.type = 'date'; i.value = P[key]; i.max = today()
+    i.onchange = () => { if (i.value) { P[key] = i.value; if (onchange) onchange(); draw() } }
+    return i
+  }
+  function text(s) { const e = document.createElement('span'); e.className = 'lbl'; e.textContent = s; return e }
+
+  function renderBar() {
+    const bar = $('bar'), kind = current[2]
+    bar.innerHTML = ''
+    if (/range/.test(kind)) {
+      const seg = document.createElement('div'); seg.className = 'seg'
+      ;[[7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']].forEach(([n, label]) => {
+        const b = document.createElement('button'); b.textContent = label
+        if (P.preset === n) b.className = 'on'
+        b.onclick = () => { P.preset = n; P.to = today(); P.from = addDays(P.to, -n); renderBar(); draw() }
+        seg.appendChild(b)
+      })
+      bar.append(text('Period'), seg, dateInput('from', () => { P.preset = 0; renderBar() }), text('–'), dateInput('to', () => { P.preset = 0; renderBar() }))
+    }
+    if (kind === 'day') bar.append(text('Day'), dateInput('day'))
+    if (kind === 'run') bar.append(text('Last run on or before'), dateInput('at'))
+    if (kind === 'pair') bar.append(text('First run on or after'), dateInput('a'), text('vs last run on or before'), dateInput('b'))
+    if (/band/.test(kind)) {
+      const l = document.createElement('label'); l.className = 'chk'
+      const c = document.createElement('input'); c.type = 'checkbox'; c.checked = P.band
+      c.onchange = () => { P.band = c.checked; draw() }
+      l.append(c, document.createTextNode('same-pace band'))
+      bar.append(l)
+    }
+  }
+
+  function showDashboards() {
+    const list = $('list')
+    DASHBOARDS.forEach((d, i) => {
+      const b = document.createElement('button')
+      b.textContent = d[1]
+      b.onclick = () => { list.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); current = d; renderBar(); draw() }
+      list.appendChild(b)
+      if (i === 0) b.click()
+    })
+    $('dash').hidden = false
+  }
+
+  // 처음 : 로그인 상태에 따라 카드나 대시보드
+  Promise.all([
+    post({ action: 'state' }),
+    call('status').catch(() => null),
+  ]).then(([si, st]) => {
+    if (si && si.reason === 'neo_auth') { $('state').textContent = 'machbase-neo session expired — reload the page'; $('state').className = 'warn'; return }
+    const s = si && si.data
+    if (!s || !s.signedIn) {
+      $('state').textContent = 'not signed in'; $('state').className = 'warn'
+      $('signin').style.display = 'grid'
+      if (s && s.lockedUntil) { $('msg1').textContent = reasonText({ reason: 'locked', lockedUntil: s.lockedUntil }) }
+      $('email').focus()
+      return
+    }
+    $('signout').hidden = false
+    const c = st && st.data && st.data.collector
+    $('state').textContent = 'signed in' + (c && c.lastOk ? ' · last collected ' + new Date(c.lastOk + 'Z').toLocaleString() : ' · first collection starts within a minute')
+    showDashboards()
+  }).catch(() => { $('state').textContent = 'status unavailable' })
+</script>
+</body>
+</html>

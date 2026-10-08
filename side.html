@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garmin — Side</title>
+<!-- 사이드 패널. 수집 상태와 켜기·끄기 버튼 (App Store 카드의 스위치와 같은 일).
+     폴링은 15초 — CGI 응답 도중 요청이 끊기면 서버가 죽는 버그가 있었다 (coin-collector DEVELOPMENT.md, v8.5.13). -->
+<style>
+  :root { color-scheme: dark; --bg: #252525; --surface: #2c2c2c; --line: rgba(255,255,255,.08); --text: #e6e6e6; --muted: #9a9a9a; --tone: #6d8bff; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 "Pretendard", system-ui, sans-serif; }
+  body { padding: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  .state { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .lamp { width: 8px; height: 8px; border-radius: 50%; background: #6b6b6b; }
+  .lamp.on { background: var(--tone); } .lamp.warn { background: #c9a14a; } .lamp.bad { background: #ef6b6b; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0 0; color: var(--muted); }
+  dd { margin: 0; color: var(--text); font-variant-numeric: tabular-nums; }
+  .toggle { margin-left: auto; border: 1px solid rgba(255,255,255,.18); background: transparent; color: var(--text); border-radius: 4px;
+            padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .toggle.start { background: var(--tone); border-color: var(--tone); color: #fff; }
+  .toggle:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="state"><span class="lamp" id="lamp"></span><span id="label">…</span><button class="toggle" id="toggle" hidden></button></div>
+  <dl>
+    <dt>Signed in</dt><dd id="signed">—</dd>
+    <dt>Service</dt><dd id="svc">—</dd>
+    <dt>Last collected</dt><dd id="last">—</dd>
+    <dt>Next run</dt><dd id="next">—</dd>
+    <dt>Past days filled</dt><dd id="back">—</dd>
+    <dt>Note</dt><dd id="err">—</dd>
+  </dl>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id)
+  // neo 로그인 토큰을 본문에 넣는다 — CGI 에는 Authorization 헤더가 넘어가지 않는다
+  const call = (api, body) => {
+    let tok = ''; try { tok = localStorage.getItem('accessToken') || '' } catch (e) {}
+    return fetch('cgi-bin/api/' + api, { method: 'POST', cache: 'no-store', body: JSON.stringify(Object.assign({ neo: tok }, body || {})) }).then((r) => r.json())
+  }
+  let last = null, busy = false
+  // 수집기는 UTC 로 적는다 (ISO 문자열에 Z 가 없을 수도 있다) — 이 브라우저의 시간대로 보인다
+  const t = (s) => (s ? new Date(/Z$/.test(s) ? s : s + 'Z').toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+  function show(d) {
+    const c = d.collector || {}
+    let lamp = '', label = c.state || 'unknown'
+    if (d.service === 'stopped') { lamp = ''; label = 'collection stopped' }
+    else if (d.service !== 'running') { lamp = 'bad'; label = 'collector ' + (d.service || 'stopped') }
+    else if (!d.signedIn) { lamp = 'warn'; label = 'waiting for sign-in' }
+    else if (c.state === 'rate_limited') { lamp = 'warn'; label = 'paused by Garmin — resumes in an hour' }
+    else if (c.state === 'error' || d.stale) { lamp = 'bad'; label = c.state === 'error' ? 'error' : 'not responding' }
+    else if (c.state === 'catching_up') { lamp = 'on'; label = 'filling past data · ' + (c.pastDay || '') }
+    else { lamp = 'on'; label = c.state === 'collecting' ? 'collecting…' : 'collecting every hour' }
+    $('lamp').className = 'lamp ' + lamp
+    $('label').textContent = label
+    $('signed').textContent = d.signedIn ? 'yes' : 'no'
+    $('svc').textContent = d.service || '—'
+    $('last').textContent = t(c.lastOk)
+    $('next').textContent = t(c.nextTick)
+    $('back').textContent = c.backfilled != null ? c.backfilled + ' (up to 1 year)' : '—'
+    $('err').textContent = c.error || '—'
+    // 켜기·끄기 한 버튼
+    const up = d.service === 'running' || d.service === 'starting'
+    const btn = $('toggle')
+    btn.hidden = !d.service || d.service === 'not_installed' || d.service === 'unknown'
+    btn.className = 'toggle' + (up ? '' : ' start')
+    btn.textContent = busy ? (up ? 'Stopping…' : 'Starting…') : (up ? 'Stop' : 'Start')
+    btn.disabled = busy
+  }
+  $('toggle').onclick = () => {
+    if (!last) return
+    const up = last.service === 'running' || last.service === 'starting'
+    busy = true; show(last)
+    call('control', { action: up ? 'stop' : 'start' })
+      .then((r) => { if (r && r.ok) last.service = r.data.service; else $('err').textContent = 'Could not ' + (up ? 'stop' : 'start') + ': ' + ((r && r.reason) || 'error') })
+      .catch(() => { $('err').textContent = 'Could not reach this server.' })
+      .finally(() => { busy = false; show(last) })
+  }
+  function poll() {
+    call('status')
+      .then((j) => { if (j && j.data) { if (!busy) { last = j.data; show(last) } } else if (j && j.reason === 'neo_auth') $('label').textContent = 'reload to see status' })
+      .catch(() => { $('label').textContent = 'status unavailable' })
+      .finally(() => setTimeout(poll, 15000))
+  }
+  poll()
+</script>
+</body>
+</html>

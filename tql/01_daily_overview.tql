@@ -1,0 +1,29 @@
+// 일별 개요 — 걸음과 안정시 심박을 함께 본다.
+// 날짜는 연도까지 묶는다 (MM-DD 로 묶으면 해가 다른 같은 날이 한 칸이 된다).
+// 기간 : 기본은 최근 1년. ?from=…&to=… (예: 2025-09-30 00:00:00) 로 고정할 수 있다.
+SQL(`select
+       to_char(time, 'YYYY-MM-DD') as day,
+       max(case when name = 'steps' then value end) as steps,
+       max(case when name = 'resting_hr' then value end) as resting_hr
+     from garmin.sys.metric
+     where name in ('steps','resting_hr') and time >= ? and time < ?
+     group by day order by day`, param('from') ?? time('now-365d'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Daily Steps · Resting Heart Rate" },
+    tooltip: { trigger: "axis" },
+    legend: { data: ["Steps", "Resting HR"], top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 40 },   // 범례는 제목 아래 — 아래쪽은 틀 높이에 따라 잘릴 수 있다
+    xAxis: { type: "category", data: column(0) },
+    yAxis: [
+      { type: "value", name: "steps" },
+      { type: "value", name: "bpm", min: 40 }   // 상한을 두지 않는다 (70 으로 두었더니 79 가 잘렸다)
+    ],
+    series: [
+      { name: "Steps", type: "bar", data: column(1), itemStyle: { color: "#5470c6" } },
+      { name: "Resting HR", type: "line", yAxisIndex: 1, data: column(2),
+        smooth: true, lineStyle: { width: 3, color: "#ee6666" } }
+    ]
+  })
+)

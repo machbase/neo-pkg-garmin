@@ -1,0 +1,26 @@
+// 월별 활동 수 — 종류별로 쌓는다. 활동 구간(span) 테이블에서 센다.
+// 기간 : 기본은 최근 1년. ?from=…&to=… (예: 2025-09-30 00:00:00) 로 고정할 수 있다.
+SQL(`select
+       to_char(begin_time, 'YYYY-MM') as m,
+       sum(case when label = 'lap_swimming' then 1 else 0 end) as swim,
+       sum(case when label in ('running', 'indoor_running') then 1 else 0 end) as run,
+       sum(case when label not in ('lap_swimming', 'running', 'indoor_running') then 1 else 0 end) as other
+     from garmin.sys.span
+     where kind = 'activity' and begin_time >= ? and begin_time < ?
+     group by m order by m`, param('from') ?? time('now-365d'), param('to') ?? time('now'))
+CHART(
+  size("100%", "420px"),
+  chartOption({
+    title: { text: "Activities per Month" },
+    tooltip: { trigger: "axis" },
+    legend: { data: ["Swim", "Run", "Other"], top: 36, left: 5, textStyle: { fontSize: 13 } },
+    grid: { top: 100, bottom: 40 },
+    xAxis: { type: "category", data: column(0) },
+    yAxis: { type: "value", name: "activities" },
+    series: [
+      { name: "Swim", type: "bar", stack: "a", data: column(1), itemStyle: { color: "#5470c6" } },
+      { name: "Run", type: "bar", stack: "a", data: column(2), itemStyle: { color: "#91cc75" } },
+      { name: "Other", type: "bar", stack: "a", data: column(3), itemStyle: { color: "#fac858" } }
+    ]
+  })
+)

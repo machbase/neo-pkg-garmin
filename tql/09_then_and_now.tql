@@ -1,0 +1,94 @@
+// 그때와 지금 — 러닝 두 번의 심박을 겹친다.
+// 러닝 A : ?a= 시각 이후의 첫 야외 러닝 (기본 1년 전부터) · 러닝 B : ?b= 시각 이전의 마지막 야외 러닝 (기본 지금까지).
+//   예) ?a=2025-11-01 00:00:00&b=2026-09-30 23:59:59 — 두 러닝의 시작 시각을 그대로 줘도 된다
+// 가로축은 "움직인 시간" 이다. 1초 표본 사이가 10초 넘게 비면 멈춘 것으로 보고 건너뛴다.
+// 선은 30초 이동 평균, 점선과 숫자는 가민이 낸 활동 평균 심박(run_hr) 이다. 숫자는 높은 쪽을 점선 위에, 낮은 쪽을 아래에 적는다 (가까우면 겹쳤다). 거리 = 움직인 시간(span.seconds) / 1km 페이스(run_pace).
+// 제목은 두 러닝이 비슷할 때(거리 ±10% · 페이스 ±10초)만 "Similar Distance, Similar Pace" 라고 쓴다.
+//
+// 러닝을 먼저 고르고 그 구간을 다시 묻는다 (SCRIPT + $.db().query). 바인드 값이 든 스칼라 서브쿼리로 한 번에 물으면
+// 같은 SQL 문장은 첫 실행의 결과를 계속 쓴다 (machbase-neo 8.7.1, docs/DEVELOPMENT.md). SCRIPT 는 ECMA5 만 된다.
+SCRIPT({
+  var P = $.params || {};
+  function each(sql, args, fn) { var db = $.db(); db.query.apply(db, [sql].concat(args)).forEach(fn); }
+  function pick(cond, args, order) {
+    var run = null;
+    each("select begin_time, end_time, seconds from garmin.sys.span where kind = 'activity' and label = 'running' and begin_time " +
+         cond + " order by begin_time " + order + " limit 1", args, function (r) { run = r; });
+    return run;
+  }
+  var runs = {
+    a: P.a ? pick(">= ?", [P.a], "asc") : pick(">= now - 365d", [], "asc"),
+    b: P.b ? pick("<= ?", [P.b], "desc") : pick("<= now", [], "desc")
+  };
+  ["a", "b"].forEach(function (k) {
+    var r = runs[k];
+    if (!r) return;
+    $.yieldArray([k, "sec", r[0], r[2]]);
+    each("select name, value from garmin.sys.metric where name in ('run_pace', 'run_hr') and time = ?", [r[0]],
+         function (m) { $.yieldArray([k, m[0], r[0], m[1]]); });
+    each("select time, value from garmin.sys.metric where name = 'act_hr' and time between ? and ? order by time", [r[0], r[1]],
+         function (m) { $.yieldArray([k, "act_hr", m[0], m[1]]); });
+  });
+})
+CHART(
+  size("100%", "520px"),
+  chartOption({ ...(function () {
+    const runs = { a: { hr: [] }, b: { hr: [] } }
+    column(0).forEach(function (r, i) {
+      const k = column(1)[i], t = column(2)[i], v = column(3)[i]
+      if (k === "act_hr") runs[r].hr.push([t, v]); else { runs[r][k] = v; if (k === "sec") runs[r].start = t }
+    })
+    const mmss = function (s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
+    const line = function (hr) {
+      // 멈춘 구간을 빼고 움직인 시간(분)으로 바꾼 뒤 30초 이동 평균을 5초마다 찍는다
+      let moving = 0, prev = null
+      const pts = hr.map(function (p) {
+        if (prev !== null) { const dt = (p[0] - prev) / 1000; moving += dt > 10 ? 1 : dt }
+        prev = p[0]
+        return [moving, p[1]]
+      })
+      const out = []
+      let lo = 0, sum = 0
+      for (let i = 0; i < pts.length; i++) {
+        sum += pts[i][1]
+        while (pts[i][0] - pts[lo][0] >= 30) sum -= pts[lo++][1]
+        if (i % 5 === 0) out.push([+(pts[i][0] / 60).toFixed(2), Math.round(sum / (i - lo + 1))])
+      }
+      return out
+    }
+    const color = { a: "#e8743b", b: "#2f6fdb" }
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const monthOf = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }   // 이 브라우저 시간대
+    const name = { a: runs.a.start ? monthOf(runs.a.start) : "run A", b: runs.b.start ? monthOf(runs.b.start) : "run B" }
+    const km = function (R) { return R.sec && R.run_pace ? R.sec / R.run_pace : 0 }
+    const similar = km(runs.a) && km(runs.b) && Math.abs(km(runs.b) - km(runs.a)) / km(runs.a) <= 0.10 && Math.abs(runs.b.run_pace - runs.a.run_pace) <= 10
+    const series = ["a", "b"].map(function (r) {
+      const R = runs[r], other = runs[r === "a" ? "b" : "a"]
+      const upper = R.run_hr > other.run_hr || (R.run_hr === other.run_hr && r === "a")
+      return {
+        name: name[r] + " · " + km(R).toFixed(1) + " km · " + mmss(R.run_pace) + " /km · avg " + R.run_hr + " bpm",
+        type: "line", showSymbol: false, smooth: true,
+        lineStyle: { width: 3, color: color[r] }, itemStyle: { color: color[r] },
+        data: line(R.hr),
+        markLine: {
+          symbol: "none", silent: true,
+          lineStyle: { type: "dashed", width: 2, color: color[r] },
+          label: { position: upper ? "insideEndTop" : "insideEndBottom", formatter: name[r] + "  " + R.run_hr + " bpm", fontSize: 18, fontWeight: "bold", color: color[r],
+                   backgroundColor: "rgba(255, 255, 255, 0.85)", padding: [2, 6] },
+          data: [{ yAxis: R.run_hr }]
+        }
+      }
+    })
+    const xmax = function (d) { return d.length ? d[d.length - 1][0] : 0 }
+    return {
+      title: { text: "Then and Now · " + (similar ? "Similar Distance, Similar Pace" : "Two Runs Compared"),
+               subtext: "Heart rate of two " + (similar ? "similar " : "") + "runs, 1-sec samples (30-s average) by moving time · dashed line = Garmin's average for the run" },
+      tooltip: { trigger: "axis" },
+      legend: { top: 58, left: 5, textStyle: { fontSize: 13 } },
+      grid: { top: 120, right: 40, bottom: 50 },
+      xAxis: { type: "value", name: "moving time (min)", nameLocation: "middle", nameGap: 30, min: 0, max: Math.max(10, Math.ceil(Math.max(xmax(series[0].data), xmax(series[1].data)) / 5) * 5), interval: 5 },
+      yAxis: { type: "value", name: "bpm", min: 60, max: 180 },
+      series: series
+    }
+  })() })
+)
