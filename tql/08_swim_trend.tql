@@ -18,7 +18,7 @@ CHART(
     tooltip: { trigger: "axis" },
     grid: { top: 120, bottom: 40 },  // 부제·범례가 축 이름과 겹치지 않게
     legend: { data: ["Pace (sec/100m)", "Avg heart rate (bpm)"], top: 58, left: 5, textStyle: { fontSize: 13 } },
-    xAxis: { type: "category", data: column(0) },
+    xAxis: { type: "category", data: (column(0) || []) },
     yAxis: [
       // 두 선이 겹치지 않게 페이스는 위쪽, 심박은 아래쪽에 오도록 범위를 잡았다
       { type: "value", name: "sec/100m", min: 40, max: 140 },
@@ -26,13 +26,13 @@ CHART(
     ],
     series: [
       { name: "Pace (sec/100m)", type: "line", symbolSize: 9, lineStyle: { width: 3, color: "#5470c6" }, itemStyle: { color: "#5470c6" },
-        data: column(1).map(function (s) {
+        data: (column(1) || []).map(function (s) {
           const m = Math.floor(s / 60), r = Math.round(s % 60)
           return { value: Math.round(s), label: { show: true, position: "bottom", formatter: m + ":" + (r < 10 ? "0" : "") + r } }
         }) },
       { name: "Avg heart rate (bpm)", type: "line", yAxisIndex: 1, symbolSize: 9, lineStyle: { width: 3, color: "#ee6666" }, itemStyle: { color: "#ee6666" },
         label: { show: true, position: "top" },
-        data: column(2).map(function (v) { return Math.round(v) }) }
+        data: (column(2) || []).map(function (v) { return Math.round(v) }) }
     ]
   })
 )

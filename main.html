@@ -24,10 +24,13 @@
   .ghost:hover { background: rgba(255,255,255,.06); }
   main { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
   nav { border-right: 1px solid var(--line); overflow: auto; padding: 8px; }
-  nav button { display: block; width: 100%; text-align: left; padding: 7px 10px; margin: 0 0 2px; border: 0; border-radius: 4px;
+  nav button { display: block; width: 100%; text-align: left; padding: 6px 10px 6px 22px; margin: 0 0 2px; border: 0; border-radius: 4px;
                background: transparent; color: var(--text); }
   nav button:hover { background: rgba(255,255,255,.05); }
   nav button.on { background: var(--surface); color: #fff; box-shadow: inset 2px 0 0 var(--tone); }
+  /* 대분류 — 항목(13px)보다 크고 굵게. 항목은 대분류 아래로 들여 쓴다 */
+  nav .group { padding: 14px 10px 4px; font-size: 14px; font-weight: 600; letter-spacing: .03em; color: #fff; }
+  nav .group:first-child { padding-top: 4px; }
   .viewer { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
   iframe { width: 100%; height: 100%; border: 0; background: #fff; }
   /* 기간 막대 */
@@ -178,19 +181,24 @@
   const BASE = '/db/tql' + location.pathname.replace(/\/[^/]*$/, '') + '/tql/'
   // 차트마다 받는 기간 인자 (tql 파일 머리 주석과 같다)
   //   range : ?from=&to= (to 는 그날 전까지)   day : 하루 ?from=&to=   run : ?at= (그날까지의 마지막 러닝)   pair : ?a=&b=   band : 11 의 띠
+  // 종목별로 묶는다. 첫 항목(Running trend)이 처음 화면이다
   const DASHBOARDS = [
+    ['Running'],
+    ['06_run_trend', 'Running trend', 'range'],
+    ['07_vo2max', 'VO2max', 'range'],
+    ['12_similar_pairs', 'Similar run pairs', 'range'],
+    ['Swimming'],
+    ['08_swim_trend', 'Swimming trend', 'range'],
+    ['All workouts'],
+    ['05_activities_monthly', 'Activities per month', 'range'],
+    ['10_year_calendar', 'One-year calendar', 'range'],
+    ['More'],
+    ['09_then_and_now', 'Then and now', 'pair'],
+    ['11_pace_hr', 'Pace vs heart rate', 'range band'],
+    ['04_run_detail', 'Run detail (1-sec)', 'run'],
     ['01_daily_overview', 'Daily steps · resting HR', 'range'],
     ['02_hr_today', 'Heart rate (one day)', 'day'],
     ['03_stress_battery', 'Stress · Body Battery', 'day'],
-    ['04_run_detail', 'Run detail (1-sec)', 'run'],
-    ['05_activities_monthly', 'Activities per month', 'range'],
-    ['06_run_trend', 'Running trend', 'range'],
-    ['07_vo2max', 'VO2max', 'range'],
-    ['08_swim_trend', 'Swimming trend', 'range'],
-    ['09_then_and_now', 'Then and now', 'pair'],
-    ['10_year_calendar', 'One-year calendar', 'range'],
-    ['11_pace_hr', 'Pace vs heart rate', 'range band'],
-    ['12_similar_pairs', 'Similar run pairs', 'range'],
   ]
   const DAY = 86400e3
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 10)   // 이 브라우저 시간대의 날짜
@@ -261,13 +269,16 @@
 
   function showDashboards() {
     const list = $('list')
-    DASHBOARDS.forEach((d, i) => {
+    let first = null
+    DASHBOARDS.forEach((d) => {
+      if (d.length === 1) { const g = document.createElement('div'); g.className = 'group'; g.textContent = d[0].toUpperCase(); list.appendChild(g); return }
       const b = document.createElement('button')
       b.textContent = d[1]
       b.onclick = () => { list.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); current = d; renderBar(); draw() }
       list.appendChild(b)
-      if (i === 0) b.click()
+      if (!first) first = b
     })
+    first.click()
     $('dash').hidden = false
   }
 

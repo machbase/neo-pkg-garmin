@@ -15,14 +15,14 @@ CHART(
     tooltip: { trigger: "axis" },
     legend: { data: ["Steps", "Resting HR"], top: 36, left: 5, textStyle: { fontSize: 13 } },
     grid: { top: 100, bottom: 40 },   // 범례는 제목 아래 — 아래쪽은 틀 높이에 따라 잘릴 수 있다
-    xAxis: { type: "category", data: column(0) },
+    xAxis: { type: "category", data: (column(0) || []) },
     yAxis: [
       { type: "value", name: "steps" },
       { type: "value", name: "bpm", min: 40 }   // 상한을 두지 않는다 (70 으로 두었더니 79 가 잘렸다)
     ],
     series: [
-      { name: "Steps", type: "bar", data: column(1), itemStyle: { color: "#5470c6" } },
-      { name: "Resting HR", type: "line", yAxisIndex: 1, data: column(2),
+      { name: "Steps", type: "bar", data: (column(1) || []), itemStyle: { color: "#5470c6" } },
+      { name: "Resting HR", type: "line", yAxisIndex: 1, data: (column(2) || []),
         smooth: true, lineStyle: { width: 3, color: "#ee6666" } }
     ]
   })

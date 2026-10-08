@@ -1,7 +1,6 @@
 // 시간대 시험 — days.js 가 neo 서버의 시간대(TZ)를 따르는지 본다. 가민·DB 를 부르지 않는다.
-//   TZ=Asia/Seoul       test/run.sh test/test_days.js
-//   TZ=America/New_York test/run.sh test/test_days.js      (서머타임이 있는 곳)
-//   TZ=UTC              test/run.sh test/test_days.js
+//   machbase-neo jsh test/test_days.js                         (저장소 맨 위에서)
+//   TZ=America/New_York machbase-neo jsh test/test_days.js     (서머타임이 있는 곳 — Linux·macOS)
 const fs = require("@jsh/fs")
 const SELF = fs.resolveAbsPath(String(require("@jsh/process").argv[1]))
 const ROOT = SELF.split("/").slice(0, -2).join("/")

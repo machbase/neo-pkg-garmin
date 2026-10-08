@@ -10,20 +10,23 @@ SCRIPT({
   $.db().query("select begin_time, end_time from garmin.sys.span where kind = 'activity' and label in ('running', 'indoor_running')" +
                " and begin_time <= ? order by begin_time desc limit 1", $.params.at || "2100-01-01 00:00:00")
     .forEach(function (r) { run = r; });
+  var n = 0;
   if (run) {
     $.db().query("select rollup('min', 1, time) as t, round(avg(value), 0) from garmin.sys.metric" +
                  " where name = 'act_hr' and time between ? and ? group by t order by t", run[0], run[1])
-      .forEach(function (r) { $.yieldArray([r[0], r[1]]); });
+      .forEach(function (r) { $.yieldArray([r[0], r[1]]); n++; });
   }
+  // 0행이면 TQL 이 차트 없이 {"success":true} 만 돌려준다 — 빈 줄 하나를 내보내 "no run" 제목이라도 그리게 한다
+  if (!n) $.yieldArray([0, null]);
 })
 CHART(
   size("100%", "460px"),
   chartOption({
     title: { text: "Running Heart Rate · " + (function () {
-      const t = column(0)
+      const t = (column(0) || []).filter(function (v) { return v > 0 })
       const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
-      return t.length ? d(t[0]) : "no run"
-    })() + " (1-min avg of 1-sec samples)" },
+      return t.length ? d(t[0]) + " (1-min avg of 1-sec samples)" : "no run with heart rate on or before this date"
+    })() },
     tooltip: { trigger: "axis" },
     legend: { top: 36, left: 5, textStyle: { fontSize: 13 } },
     grid: { top: 100, bottom: 70 },   // 아래는 확대 막대 자리
@@ -34,7 +37,7 @@ CHART(
       name: "Heart rate", type: "line", smooth: true, showSymbol: false,
       lineStyle: { width: 2, color: "#91cc75" },
       itemStyle: { color: "#91cc75" },
-      data: column(0).map(function (t, i) { return [t, column(1)[i]] })
+      data: (column(0) || []).map(function (t, i) { return [t, (column(1) || [])[i]] }).filter(function (p) { return p[0] > 0 })
     }]
   })
 )

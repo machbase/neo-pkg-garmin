@@ -2,7 +2,6 @@
 cgi-bin/conf.d/*.json
 # 수집기 상태
 data/*.json*
-dist/
 *.log
 # 비밀이 될 만한 파일이 실수로 들어오지 않게
 *.env

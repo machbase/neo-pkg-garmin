@@ -1,5 +1,5 @@
 // 수집 시험 — 가민과 DB 를 부르지 않는다. garmin_auth · token · store 의 함수를 가짜로 바꿔 끼운다.
-//   test/run.sh test/test_collector.js
+//   machbase-neo jsh test/test_collector.js   (저장소 맨 위에서)
 // 실패하면 예외를 던지고 그 날을 "받음" 으로 적지 않는지, 받은 날은 토큰도 건드리지 않는지 본다.
 const fs = require("@jsh/fs")
 const SELF = fs.resolveAbsPath(String(require("@jsh/process").argv[1]))

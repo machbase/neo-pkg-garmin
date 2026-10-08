@@ -26,22 +26,24 @@ CHART(
     const DAY = 86400e3
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const p2 = function (n) { return String(n).padStart(2, "0") }
+    // URL 인자 열(MAPVALUE)은 질의 결과가 0행이면 생기지 않는다 — 없으면 "" (기본 기간으로 그린다)
+    const arg = function (n) { const c = column(n); return c && c.length ? c[0] : "" }
     const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
     const ymd = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
     const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
     const mdY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() }
-    const TO = parse(column(7)[0]) || Date.now(), FROM = parse(column(6)[0]) || TO - 365 * DAY
-    const BEFORE = parse(column(4)[0]) || FROM + (TO - FROM) / 3, SINCE = parse(column(5)[0]) || TO - (TO - FROM) / 3
-    const bandArg = String(column(3)[0] || "")
+    const TO = parse(arg(7)) || Date.now(), FROM = parse(arg(6)) || TO - 365 * DAY
+    const BEFORE = parse(arg(4)) || FROM + (TO - FROM) / 3, SINCE = parse(arg(5)) || TO - (TO - FROM) / 3
+    const bandArg = String(arg(3) || "")
     const showBand = bandArg !== "0"
-    const paces = column(1).slice().sort(function (a, b) { return a - b })
+    const paces = (column(1) || []).slice().sort(function (a, b) { return a - b })
     const med = paces.length ? paces[Math.floor(paces.length / 2)] : 390
     const m = /^(\d+)-(\d+)$/.exec(bandArg)
     const BAND = m ? [Number(m[1]), Number(m[2])] : [Math.round(med - 15), Math.round(med + 15)]
     const mmss = function (s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
-    const pts = column(0).map(function (t, i) { return [column(1)[i] / 60, column(2)[i], t] })
+    const pts = (column(0) || []).map(function (t, i) { return [(column(1) || [])[i] / 60, (column(2) || [])[i], t] })
     const avg = function (from, to) {
-      const v = column(0).map(function (t, i) { return [t, column(1)[i], column(2)[i]] })
+      const v = (column(0) || []).map(function (t, i) { return [t, (column(1) || [])[i], (column(2) || [])[i]] })
         .filter(function (r) { return r[1] >= BAND[0] && r[1] <= BAND[1] && r[0] >= from && r[0] < to })
       return { n: v.length, hr: Math.round(v.reduce(function (s, r) { return s + r[2] }, 0) / v.length) }
     }
@@ -73,9 +75,10 @@ CHART(
                 data: series.map(function (s, i) { return i ? s.name : { name: s.name, itemStyle: { color: "#3f6bb0" } } }) },
       grid: { top: 120, right: 40, bottom: 50 },
       // 색 막대(오래된 → 최근)는 범례 줄 오른쪽에 눕힌다
-      visualMap: { type: "continuous", dimension: 2, seriesIndex: 0, min: column(0)[0], max: column(0)[column(0).length - 1],
+      // 러닝이 없으면 색 막대를 그리지 않는다 (min·max 가 없으면 그라디언트에서 오류)
+      visualMap: !pts.length ? [] : { type: "continuous", dimension: 2, seriesIndex: 0, min: (column(0) || [])[0], max: (column(0) || [])[(column(0) || []).length - 1],
                    orient: "horizontal", right: 30, top: 58, itemWidth: 12, itemHeight: 140, calculable: false,
-                   text: [column(0).length ? mY(column(0)[column(0).length - 1]) : "", column(0).length ? mY(column(0)[0]) : ""], inRange: { color: ["#cfe0f5", "#0b2e6b"] } },
+                   text: [(column(0) || []).length ? mY((column(0) || [])[(column(0) || []).length - 1]) : "", (column(0) || []).length ? mY((column(0) || [])[0]) : ""], inRange: { color: ["#cfe0f5", "#0b2e6b"] } },
       xAxis: { type: "value", name: "pace (min/km)", nameLocation: "middle", nameGap: 32, min: 5, max: 8, interval: 0.25,
                axisLabel: { formatter: function (v) { return mmss(v * 60) } } },
       yAxis: { type: "value", name: "avg bpm", min: 110, max: 170 },

@@ -15,17 +15,17 @@ CHART(
     const pick = function (name) {
       const out = []
       let prev = null
-      column(0).forEach(function (t, i) {
-        if (column(1)[i] !== name) return
+      ;(column(0) || []).forEach(function (t, i) {
+        if ((column(1) || [])[i] !== name) return
         if (prev !== null && t - prev > 30 * 60e3) out.push([t - 1, null])
-        out.push([t, column(2)[i]]); prev = t
+        out.push([t, (column(2) || [])[i]]); prev = t
       })
       return out
     }
     return {
     title: { text: "Stress · Body Battery · " + (function () {
       const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
-      const t = column(0)
+      const t = (column(0) || [])
       if (!t.length) return "no data"
       const a = d(t[0]), b = d(t[t.length - 1])
       return a === b ? a : a + " – " + b

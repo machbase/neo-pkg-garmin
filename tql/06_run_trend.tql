@@ -17,7 +17,7 @@ CHART(
     tooltip: { trigger: "axis" },
     legend: { data: ["Pace (min/km)", "Avg heart rate (bpm)"], top: 36, left: 5, textStyle: { fontSize: 13 } },
     grid: { top: 100, bottom: 40 },
-    xAxis: { type: "category", data: column(0) },
+    xAxis: { type: "category", data: (column(0) || []) },
     yAxis: [
       // 두 선이 겹치지 않게 페이스는 위쪽, 심박은 아래쪽에 오도록 범위를 잡았다
       { type: "value", name: "min/km", min: 4, max: 7, interval: 0.5 },
@@ -25,13 +25,13 @@ CHART(
     ],
     series: [
       { name: "Pace (min/km)", type: "line", symbolSize: 9, lineStyle: { width: 3, color: "#91cc75" }, itemStyle: { color: "#91cc75" },
-        data: column(1).map(function (s) {
+        data: (column(1) || []).map(function (s) {
           const m = Math.floor(s / 60), r = Math.round(s % 60)
           return { value: Math.round(s / 60 * 100) / 100, label: { show: true, position: "bottom", formatter: m + ":" + (r < 10 ? "0" : "") + r } }
         }) },
       { name: "Avg heart rate (bpm)", type: "line", yAxisIndex: 1, symbolSize: 9, lineStyle: { width: 3, color: "#ee6666" }, itemStyle: { color: "#ee6666" },
         label: { show: true, position: "top" },
-        data: column(2).map(function (v) { return Math.round(v) }) }
+        data: (column(2) || []).map(function (v) { return Math.round(v) }) }
     ]
   })
 )

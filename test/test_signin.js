@@ -1,5 +1,5 @@
 // 로그인 흐름 시험 — 가민을 부르지 않는다. garmin_auth 의 함수를 가짜로 바꿔 끼운다.
-//   test/run.sh test/test_signin.js   — cgi-bin/conf.d 에 쓰고 끝나면 지운다 (토큰이 있으면 시작하지 않는다)
+//   machbase-neo jsh test/test_signin.js   (저장소 맨 위에서) — cgi-bin/conf.d 에 쓰고 끝나면 지운다 (토큰이 있으면 시작하지 않는다)
 const fs = require("@jsh/fs")
 const SELF = fs.resolveAbsPath(String(require("@jsh/process").argv[1]))
 const ROOT = SELF.split("/").slice(0, -2).join("/")

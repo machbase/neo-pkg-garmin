@@ -22,15 +22,17 @@ CHART(
     const DAY = 86400e3
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const p2 = function (n) { return String(n).padStart(2, "0") }
+    // URL 인자 열(MAPVALUE)은 질의 결과가 0행이면 생기지 않는다 — 없으면 "" (기본 기간으로 그린다)
+    const arg = function (n) { const c = column(n); return c && c.length ? c[0] : "" }
     const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
     const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
-    const TO = parse(column(6)[0]) || Date.now(), FROM = parse(column(5)[0]) || TO - 365 * DAY
-    const EARLY = [FROM, parse(column(3)[0]) || FROM + (TO - FROM) / 3], LATE = [parse(column(4)[0]) || TO - (TO - FROM) / 3, TO]
+    const TO = parse(arg(6)) || Date.now(), FROM = parse(arg(5)) || TO - 365 * DAY
+    const EARLY = [FROM, parse(arg(3)) || FROM + (TO - FROM) / 3], LATE = [parse(arg(4)) || TO - (TO - FROM) / 3, TO]
     const day = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
     const runs = {}
-    column(0).forEach(function (t, i) {
+    ;(column(0) || []).forEach(function (t, i) {
       const r = runs[t] = runs[t] || { t: t, day: day(t) }
-      const k = column(1)[i], v = column(2)[i]
+      const k = (column(1) || [])[i], v = (column(2) || [])[i]
       if (k === "detail") { const m = /dist=(\d+)/.exec(v); if (m) r.dist = Number(m[1]) } else r[k] = Number(v)
     })
     const list = Object.values(runs).filter(function (r) { return r.dist && r.run_pace && r.run_hr })
@@ -51,8 +53,12 @@ CHART(
     const HEAD = { e: cell([104, "left", "#888"]), l: cell([104, "left", "#888"]), k: cell([56, "right", "#888"]) }
     const describe = function (i) { const p = pairs[i]; return fmt(p[0].day) + " → " + fmt(p[1].day) + " · " + (p[0].dist / 1000).toFixed(1) + " km" }
     return {
-      title: { text: lower + " of " + pairs.length + " Similar Pairs: Lower Heart Rate on the Later Run",
+      title: { text: pairs.length ? lower + " of " + pairs.length + " Similar Pairs: Lower Heart Rate on the Later Run" : "No Similar Run Pairs Yet",
                subtext: "Earlier: " + mY(EARLY[0]) + " – " + mY(EARLY[1] - 1) + " · Later: " + mY(LATE[0]) + " – " + mY(LATE[1] - 1) + " · distance within ±10% · pace within ±10 s/km · arrow = earlier → later" },
+      // 쌍이 없으면 빈 축 대신 무엇을 하면 되는지 적는다 (과거 데이터를 채우는 중이면 쌍이 아직 없다)
+      graphic: pairs.length ? [] : [{ type: "text", left: "center", top: "middle",
+        style: { text: "Needs an earlier and a later outdoor run of similar distance and pace.\nTry a longer period such as 1 year — past data may still be filling (see the side panel).",
+                 fill: "#666", font: "15px sans-serif", textAlign: "center", lineHeight: 24 } }],
       tooltip: { trigger: "item", formatter: function (x) { return describe(Number(x.value[1])) + "<br>" + x.seriesName + " · " + x.value[0] + " bpm" } },
       legend: { top: 58, left: 5, textStyle: { fontSize: 13 }, data: ["Earlier run", "Later run"] },
       grid: { top: 130, left: 300, right: 80, bottom: 40 },

@@ -10,7 +10,7 @@ A machbase-neo package that **collects your own Garmin Connect data — heart ra
 
 > **Unofficial.** This package is not affiliated with, endorsed by, or supported by Garmin. It uses the same sign-in and data interfaces as the Garmin Connect mobile app, which Garmin does not offer as a public API. Use it only with your own account, at your own risk — see [Disclaimer](#disclaimer).
 
-![Pace vs heart rate — collector status in the side panel on the left, the package tab on the right](docs/images/pace-vs-heart-rate.png)
+![Similar run pairs — collector status in the side panel on the left, the package tab on the right](docs/images/similar-run-pairs.png)
 
 ## Requirements
 
@@ -22,7 +22,7 @@ A machbase-neo package that **collects your own Garmin Connect data — heart ra
 
 ## Installation
 
-1. Download a ZIP file from this repository using **Code → Download ZIP**, or download an archive from **Releases**.
+1. Download a ZIP file from this repository using **Code → Download ZIP**.
 2. Place the downloaded file **without extracting it** in the `public/` directory under your machbase-neo installation directory.
 
    ```text
@@ -66,7 +66,7 @@ Open the **App Store**, click `neo-pkg-garmin`, and the package tab opens. The s
 - To protect your account, the app pauses sign-in for 15 minutes after three failed attempts, and for 2 hours when Garmin limits sign-ins (HTTP 429). Repeated sign-ins can get an account limited by Garmin.
 - Each machbase-neo server keeps **one** Garmin sign-in. Everyone who uses that server sees the same data.
 
-### Collection (automatic — no button)
+### Collection (automatic)
 
 - **Every hour**: yesterday and today. Yesterday is read again so that data from a late watch sync is not missed; records already stored are skipped.
 - **Right after sign-in**: past days, one day every 15 seconds, up to one year back (about two hours for a full year).
@@ -74,24 +74,36 @@ Open the **App Store**, click `neo-pkg-garmin`, and the package tab opens. The s
 - New data appears after your watch syncs with Garmin Connect (the phone app).
 - How far back Garmin returns data: steps and workouts for a year or more; 2–3-minute heart rate, stress, and Body Battery for about the last five months.
 
+### Start / Stop
+
+The **Start / Stop** button in the side panel turns collection on and off (the same as the switch on the App Store card).
+
+- **Stop** ends the collector right away, so no more requests go to Garmin. Your sign-in, the collected data, and the dashboards stay. A day that was being collected is collected again from the start next time.
+- **Start** collects yesterday and today first, fills any days missed while stopped, and then collects every hour.
+- Stop is a **pause**: when machbase-neo restarts, the collector starts again. To stop for good, **Sign out** (deletes the token) or **Uninstall**.
+
 ### Dashboards
 
-Choose a dashboard from the list on the left. The bar at the top sets the period: **7 days, 30 days, 90 days, 1 year**, or any date range.
+Choose a dashboard from the list on the left — grouped by sport; the app opens on **Running trend**. The bar at the top sets the period: **7 days, 30 days, 90 days, 1 year**, or any date range.
 
 | Dashboard | What it shows |
 |---|---|
+| **Running** | |
+| Running trend | Monthly average pace (moving time) and heart rate |
+| VO2max | Garmin's VO2max estimate for each run |
+| Similar run pairs | Pairs of an earlier and a later run with distance within ±10% and pace within ±10 s/km. Arrows go from the earlier run to the later run |
+| **Swimming** | |
+| Swimming trend | Monthly average pace per 100 m and heart rate |
+| **All workouts** | |
+| Activities per month | Workouts per month by type (swim, run, other) |
+| One-year calendar | One cell per day (gray = steps), dots for workouts. Each column is a week, Monday to Sunday from top to bottom |
+| **More** | |
+| Then and now | Heart rate of two runs, overlaid by moving time. Choose the first run on or after one date and the last run on or before another |
+| Pace vs heart rate | One dot per outdoor run. A "same-pace band" compares the average heart rate of earlier and later runs at similar pace (checkbox to hide) |
+| Run detail (1-sec) | Heart rate of one run from 1-second samples. Choose "last run on or before" a date; zoom with the slider |
 | Daily steps · resting HR | Steps per day (bars) and resting heart rate (line) |
 | Heart rate (one day) | One day of heart rate, 10-minute averages. Choose the day |
 | Stress · Body Battery | Stress and Body Battery for one day |
-| Run detail (1-sec) | Heart rate of one run from 1-second samples. Choose "last run on or before" a date; zoom with the slider |
-| Activities per month | Workouts per month by type (swim, run, other) |
-| Running trend | Monthly average pace (moving time) and heart rate |
-| VO2max | Garmin's VO2max estimate for each run |
-| Swimming trend | Monthly average pace per 100 m and heart rate |
-| Then and now | Heart rate of two runs, overlaid by moving time. Choose the first run on or after one date and the last run on or before another |
-| One-year calendar | One cell per day (gray = steps), dots for workouts. Each column is a week, Monday to Sunday from top to bottom |
-| Pace vs heart rate | One dot per outdoor run. A "same-pace band" compares the average heart rate of earlier and later runs at similar pace (checkbox to hide) |
-| Similar run pairs | Pairs of an earlier and a later run with distance within ±10% and pace within ±10 s/km. Arrows go from the earlier run to the later run |
 
 ### Side panel
 
@@ -178,4 +190,4 @@ Garmin and Garmin Connect are trademarks of Garmin Ltd. or its subsidiaries. Thi
 - **Requests are kept low**: once an hour, past data slowly, and a pause whenever Garmin answers HTTP 429.
 - The software is provided "as is", without warranty of any kind.
 
-Development and architecture notes are available in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Korean). `pack.sh` builds the release archive; tests are in `test/`.
+Development and architecture notes are available in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Korean). Tests are in `test/` — run one with `machbase-neo jsh test/test_collector.js` from the repository root (any OS).

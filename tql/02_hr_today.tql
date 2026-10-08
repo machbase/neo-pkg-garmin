@@ -13,7 +13,7 @@ CHART(
   chartOption({
     title: { text: "Heart Rate · " + (function () {
       const d = function (ms) { const x = new Date(ms); return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0") }   // 이 브라우저 시간대의 날짜
-      const t = column(0)
+      const t = (column(0) || [])
       if (!t.length) return "no data"
       const a = d(t[0]), b = d(t[t.length - 1])
       return a === b ? a : a + " – " + b
@@ -28,9 +28,9 @@ CHART(
       areaStyle: { opacity: 0.15 },
       lineStyle: { width: 2, color: "#ee6666" },
       itemStyle: { color: "#ee6666" },
-      data: column(0).reduce(function (out, t, i) {
-        if (i > 0 && t - column(0)[i - 1] > 30 * 60e3) out.push([t - 1, null])
-        out.push([t, column(1)[i]])
+      data: (column(0) || []).reduce(function (out, t, i) {
+        if (i > 0 && t - (column(0) || [])[i - 1] > 30 * 60e3) out.push([t - 1, null])
+        out.push([t, (column(1) || [])[i]])
         return out
       }, [])
     }]

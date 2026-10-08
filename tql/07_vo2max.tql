@@ -14,10 +14,10 @@ CHART(
     series: [{
       name: "VO2max", type: "line", symbolSize: 8, lineStyle: { width: 2, color: "#5470c6" }, itemStyle: { color: "#5470c6" },
       // 러닝이 30일 넘게 없던 구간은 선을 잇지 않는다 — 그 사이 값이 있었던 것처럼 보이지 않게
-      data: column(0).reduce(function (out, t, i) {
-        const v = column(1)[i]
-        const repeat = i > 0 && column(1)[i - 1] === v
-        if (i > 0 && t - column(0)[i - 1] > 30 * 86400e3) out.push({ value: [(t + column(0)[i - 1]) / 2, null] })
+      data: (column(0) || []).reduce(function (out, t, i) {
+        const v = (column(1) || [])[i]
+        const repeat = i > 0 && (column(1) || [])[i - 1] === v
+        if (i > 0 && t - (column(0) || [])[i - 1] > 30 * 86400e3) out.push({ value: [(t + (column(0) || [])[i - 1]) / 2, null] })
         out.push({ value: [t, v], label: { show: (v >= 49 || v <= 45) && !repeat, position: v >= 49 ? "top" : "bottom", formatter: String(v) } })
         return out
       }, [])

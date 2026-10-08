@@ -10,7 +10,7 @@
 
 > **비공식 패키지입니다.** Garmin 과 제휴·보증·지원 관계가 없습니다. Garmin Connect 모바일 앱과 같은 로그인·데이터 인터페이스를 쓰며, Garmin 은 이를 공개 API 로 제공하지 않습니다. 본인 계정으로만, 본인 책임으로 사용하세요 — [고지](#고지) 참고.
 
-![페이스-심박 — 왼쪽 사이드 패널은 수집 상태, 오른쪽은 패키지 탭](docs/images/pace-vs-heart-rate.png)
+![비슷한 러닝 짝 — 왼쪽 사이드 패널은 수집 상태, 오른쪽은 패키지 탭](docs/images/similar-run-pairs.png)
 
 ## 요구 사항
 
@@ -22,7 +22,7 @@
 
 ## 설치
 
-1. 이 저장소에서 **Code → Download ZIP** 으로 ZIP 을 받거나, **Releases** 에서 아카이브를 받습니다.
+1. 이 저장소에서 **Code → Download ZIP** 으로 ZIP 을 받습니다.
 2. 받은 파일을 **압축을 풀지 않고** machbase-neo 설치 폴더 아래 `public/` 에 둡니다.
 
    ```text
@@ -66,7 +66,7 @@ DROP DATABASE GARMIN;
 - 계정을 보호하려고 로그인이 3번 실패하면 15분, Garmin 이 로그인을 제한하면(HTTP 429) 2시간 동안 로그인을 받지 않습니다. 로그인을 반복하면 Garmin 이 계정을 제한할 수 있습니다.
 - machbase-neo 서버 하나에 Garmin 로그인은 **하나**입니다. 그 서버를 쓰는 사람은 모두 같은 데이터를 봅니다.
 
-### 수집 (자동 — 버튼 없음)
+### 수집 (자동)
 
 - **1시간마다** : 어제와 오늘. 시계가 늦게 동기화해도 빠지지 않게 어제도 다시 읽고, 이미 저장한 기록은 건너뜁니다.
 - **로그인 직후** : 지난 날을 15초에 하루씩, 최대 1년 전까지 채웁니다 (1년치에 약 2시간).
@@ -74,24 +74,36 @@ DROP DATABASE GARMIN;
 - 새 데이터는 시계가 Garmin Connect(휴대폰 앱)와 동기화한 뒤에 들어옵니다.
 - Garmin 이 돌려주는 과거 범위 : 걸음·운동은 1년 이상, 2~3분 간격 심박·스트레스·Body Battery 는 최근 약 5개월.
 
+### Start / Stop
+
+사이드 패널의 **Start / Stop** 버튼으로 수집을 켜고 끕니다 (App Store 카드의 스위치와 같습니다).
+
+- **Stop** 은 수집기를 바로 멈춥니다. Garmin 에 보내는 요청도 멈춥니다. 로그인·수집한 데이터·대시보드는 그대로이고, 받던 날은 다음에 처음부터 다시 받습니다.
+- **Start** 는 어제·오늘을 먼저 받고, 멈춘 동안 빠진 날을 채운 뒤 1시간마다 수집합니다.
+- Stop 은 **일시 정지**입니다. machbase-neo 를 다시 시작하면 수집기도 다시 켜집니다. 완전히 끄려면 **Sign out**(토큰 삭제)이나 **Uninstall** 을 하세요.
+
 ### 대시보드
 
-왼쪽 목록에서 대시보드를 고릅니다. 위쪽 막대로 기간을 정합니다 — **7 days · 30 days · 90 days · 1 year** 또는 날짜 범위.
+왼쪽 목록에서 대시보드를 고릅니다 — 종목별로 묶여 있고, 앱을 열면 **Running trend** 가 먼저 보입니다. 위쪽 막대로 기간을 정합니다 — **7 days · 30 days · 90 days · 1 year** 또는 날짜 범위.
 
 | 대시보드 | 보여 주는 것 |
 |---|---|
+| **Running** | |
+| Running trend | 월평균 페이스(움직인 시간 기준)와 심박 |
+| VO2max | 러닝마다 Garmin 이 추정한 VO2max |
+| Similar run pairs | 거리 ±10% · 페이스 ±10초/km 안인 앞 러닝과 뒤 러닝의 짝. 화살표는 앞 러닝에서 뒤 러닝으로 |
+| **Swimming** | |
+| Swimming trend | 월평균 100m 페이스와 심박 |
+| **All workouts** | |
+| Activities per month | 종목별(수영·러닝·그 밖) 월별 운동 수 |
+| One-year calendar | 칸 하나가 하루(회색 = 걸음), 점은 운동. 한 열이 한 주이고 위에서 아래로 월~일 |
+| **More** | |
+| Then and now | 러닝 두 번의 심박을 움직인 시간으로 겹쳐 봅니다. 앞 날짜 이후 첫 러닝과 뒤 날짜 이전 마지막 러닝 |
+| Pace vs heart rate | 야외 러닝 하나가 점 하나. "같은 페이스 띠" 에서 앞 기간과 뒤 기간의 평균 심박을 비교 (체크박스로 끔) |
+| Run detail (1-sec) | 러닝 한 번의 1초 간격 심박. 고른 날짜 이전의 마지막 러닝, 아래 막대로 확대 |
 | Daily steps · resting HR | 하루 걸음(막대)과 안정시 심박(선) |
 | Heart rate (one day) | 하루 심박, 10분 평균. 날짜를 고릅니다 |
 | Stress · Body Battery | 하루의 스트레스와 Body Battery |
-| Run detail (1-sec) | 러닝 한 번의 1초 간격 심박. 고른 날짜 이전의 마지막 러닝, 아래 막대로 확대 |
-| Activities per month | 종목별(수영·러닝·그 밖) 월별 운동 수 |
-| Running trend | 월평균 페이스(움직인 시간 기준)와 심박 |
-| VO2max | 러닝마다 Garmin 이 추정한 VO2max |
-| Swimming trend | 월평균 100m 페이스와 심박 |
-| Then and now | 러닝 두 번의 심박을 움직인 시간으로 겹쳐 봅니다. 앞 날짜 이후 첫 러닝과 뒤 날짜 이전 마지막 러닝 |
-| One-year calendar | 칸 하나가 하루(회색 = 걸음), 점은 운동. 한 열이 한 주이고 위에서 아래로 월~일 |
-| Pace vs heart rate | 야외 러닝 하나가 점 하나. "같은 페이스 띠" 에서 앞 기간과 뒤 기간의 평균 심박을 비교 (체크박스로 끔) |
-| Similar run pairs | 거리 ±10% · 페이스 ±10초/km 안인 앞 러닝과 뒤 러닝의 짝. 화살표는 앞 러닝에서 뒤 러닝으로 |
 
 ### 사이드 패널
 
@@ -178,4 +190,4 @@ Garmin 과 Garmin Connect 는 Garmin Ltd. 또는 그 자회사의 상표입니�
 - **요청을 적게 합니다** : 1시간에 한 번, 지난 데이터는 천천히, Garmin 이 HTTP 429 로 답하면 멈춥니다.
 - 소프트웨어는 "있는 그대로" 제공되며 어떤 보증도 하지 않습니다.
 
-개발·구조 메모는 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 에 있습니다. `pack.sh` 로 배포용 아카이브를 만들고, 시험은 `test/` 에 있습니다.
+개발·구조 메모는 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 에 있습니다. 시험은 `test/` 에 있습니다 — 저장소 맨 위에서 `machbase-neo jsh test/test_collector.js` 처럼 하나씩 돌립니다 (OS 상관없음).

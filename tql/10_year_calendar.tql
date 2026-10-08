@@ -20,11 +20,13 @@ CHART(
     const DAY = 86400e3
     const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const p2 = function (n) { return String(n).padStart(2, "0") }
+    // URL 인자 열(MAPVALUE)은 질의 결과가 0행이면 생기지 않는다 — 없으면 "" (기본 기간으로 그린다)
+    const arg = function (n) { const c = column(n); return c && c.length ? c[0] : "" }
     const parse = function (s) { if (!s) return null; s = String(s).trim(); if (s.length === 10) s += " 00:00:00"; const v = new Date(s.replace(" ", "T")).getTime(); return isNaN(v) ? null : v }   // 시간대 없는 날짜·시각은 현지로 읽힌다
     const ymd = function (ms) { const d = new Date(ms); return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) }
     const mY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getFullYear() }
     const mdY = function (ms) { const d = new Date(ms); return MON[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() }
-    const TO = parse(column(4)[0]) || Date.now(), FROM = parse(column(3)[0]) || TO - 365 * DAY
+    const TO = parse(arg(4)) || Date.now(), FROM = parse(arg(3)) || TO - 365 * DAY
     // 가운데 날이 든 달의 1일에서 나눈다 (2025-09-30 ~ 2026-09-30 이면 3/31 까지 · 4/1 부터)
     const midDay = ymd(FROM + (TO - FROM) / 2)
     const SPLIT = parse(midDay.slice(0, 8) + "01")
@@ -37,8 +39,8 @@ CHART(
       { name: "Other", color: "#8e44ad", dx: 14, match: function () { return true } }
     ]
     const steps = [[], []], dots = kinds.map(function () { return [[], []] })
-    column(0).forEach(function (k, i) {
-      const day = column(1)[i], v = column(2)[i]
+    ;(column(0) || []).forEach(function (k, i) {
+      const day = (column(1) || [])[i], v = (column(2) || [])[i]
       if (k === "steps") { steps[half(day)].push([day, v]); return }
       const j = kinds.findIndex(function (x) { return x.match(k) })
       if (!dots[j][half(day)].some(function (d) { return d[0] === day })) dots[j][half(day)].push([day, 1])

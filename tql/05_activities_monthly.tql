@@ -15,12 +15,12 @@ CHART(
     tooltip: { trigger: "axis" },
     legend: { data: ["Swim", "Run", "Other"], top: 36, left: 5, textStyle: { fontSize: 13 } },
     grid: { top: 100, bottom: 40 },
-    xAxis: { type: "category", data: column(0) },
+    xAxis: { type: "category", data: (column(0) || []) },
     yAxis: { type: "value", name: "activities" },
     series: [
-      { name: "Swim", type: "bar", stack: "a", data: column(1), itemStyle: { color: "#5470c6" } },
-      { name: "Run", type: "bar", stack: "a", data: column(2), itemStyle: { color: "#91cc75" } },
-      { name: "Other", type: "bar", stack: "a", data: column(3), itemStyle: { color: "#fac858" } }
+      { name: "Swim", type: "bar", stack: "a", data: (column(1) || []), itemStyle: { color: "#5470c6" } },
+      { name: "Run", type: "bar", stack: "a", data: (column(2) || []), itemStyle: { color: "#91cc75" } },
+      { name: "Other", type: "bar", stack: "a", data: (column(3) || []), itemStyle: { color: "#fac858" } }
     ]
   })
 )

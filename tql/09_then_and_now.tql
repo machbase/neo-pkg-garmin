@@ -29,13 +29,16 @@ SCRIPT({
     each("select time, value from garmin.sys.metric where name = 'act_hr' and time between ? and ? order by time", [r[0], r[1]],
          function (m) { $.yieldArray([k, "act_hr", m[0], m[1]]); });
   });
+  // 0행이면 TQL 이 차트 없이 {"success":true} 만 돌려준다 — 표시 줄 하나를 내보낸다
+  if (!runs.a && !runs.b) $.yieldArray(["none", "none", 0, 0]);
 })
 CHART(
   size("100%", "520px"),
   chartOption({ ...(function () {
     const runs = { a: { hr: [] }, b: { hr: [] } }
-    column(0).forEach(function (r, i) {
-      const k = column(1)[i], t = column(2)[i], v = column(3)[i]
+    ;(column(0) || []).forEach(function (r, i) {
+      const k = (column(1) || [])[i], t = (column(2) || [])[i], v = (column(3) || [])[i]
+      if (!runs[r]) return                                     // "none" — 고른 기간에 러닝이 없다
       if (k === "act_hr") runs[r].hr.push([t, v]); else { runs[r][k] = v; if (k === "sec") runs[r].start = t }
     })
     const mmss = function (s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
@@ -62,7 +65,8 @@ CHART(
     const name = { a: runs.a.start ? monthOf(runs.a.start) : "run A", b: runs.b.start ? monthOf(runs.b.start) : "run B" }
     const km = function (R) { return R.sec && R.run_pace ? R.sec / R.run_pace : 0 }
     const similar = km(runs.a) && km(runs.b) && Math.abs(km(runs.b) - km(runs.a)) / km(runs.a) <= 0.10 && Math.abs(runs.b.run_pace - runs.a.run_pace) <= 10
-    const series = ["a", "b"].map(function (r) {
+    const found = ["a", "b"].filter(function (r) { return runs[r].start })
+    const series = found.map(function (r) {
       const R = runs[r], other = runs[r === "a" ? "b" : "a"]
       const upper = R.run_hr > other.run_hr || (R.run_hr === other.run_hr && r === "a")
       return {
@@ -81,12 +85,12 @@ CHART(
     })
     const xmax = function (d) { return d.length ? d[d.length - 1][0] : 0 }
     return {
-      title: { text: "Then and Now · " + (similar ? "Similar Distance, Similar Pace" : "Two Runs Compared"),
+      title: { text: "Then and Now · " + (similar ? "Similar Distance, Similar Pace" : found.length ? "Two Runs Compared" : "No Runs in the Chosen Dates"),
                subtext: "Heart rate of two " + (similar ? "similar " : "") + "runs, 1-sec samples (30-s average) by moving time · dashed line = Garmin's average for the run" },
       tooltip: { trigger: "axis" },
       legend: { top: 58, left: 5, textStyle: { fontSize: 13 } },
       grid: { top: 120, right: 40, bottom: 50 },
-      xAxis: { type: "value", name: "moving time (min)", nameLocation: "middle", nameGap: 30, min: 0, max: Math.max(10, Math.ceil(Math.max(xmax(series[0].data), xmax(series[1].data)) / 5) * 5), interval: 5 },
+      xAxis: { type: "value", name: "moving time (min)", nameLocation: "middle", nameGap: 30, min: 0, max: Math.max(10, Math.ceil(Math.max.apply(null, [0].concat(series.map(function (s) { return xmax(s.data) }))) / 5) * 5), interval: 5 },
       yAxis: { type: "value", name: "bpm", min: 60, max: 180 },
       series: series
     }

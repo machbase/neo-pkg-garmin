@@ -12,8 +12,7 @@ machbase-neo 8.7.1 에서 이 패키지를 만들며 확인한 것. 사용법은
 | `cgi-bin/src/` | 모듈 — `garmin_auth` (로그인·OAuth 서명), `signin` (로그인 상태·잠금), `token` (저장·갱신), `collector` (하루치 수집), `store` (neo HTTP API 로 적재), `schema`, `days` (시간대), `paths`, `cgi`, `sha1` |
 | `service/collector.js` | 상주 수집기. `scripts/install.js` 가 neo 서비스 `neo-pkg-garmin-svc` 로 등록한다 |
 | `tql/` | 대시보드 12개 |
-| `test/` | `test/run.sh` — 가민·DB 를 부르지 않는 시험 |
-| `pack.sh` | 배포 아카이브 `dist/neo-pkg-garmin-<버전>.tar.gz` (토큰·상태 파일·시험은 빼고) |
+| `test/` | 가민·DB 를 부르지 않는 시험 (아래 "시험") |
 
 수집기는 cgi-bin 밖에 둔다. cgi-bin 안의 `.js` 는 HTTP 요청마다 CGI 로 실행되므로, 거기 두면 요청 한 번에 수집기가 하나 더 뜬다.
 `cgi-bin/src` 의 모듈도 주소로 부르면 실행되므로 불러올 때 아무 일도 하지 않게 둔다.
@@ -81,6 +80,9 @@ neo 를 OS 와 다른 `TZ` 로 띄우면 시작하지 않는다 (`MACHCLI-ERR-48
 - URL 인자는 `param('from') ?? time('now-365d')` 로 바인드한다. 차트 JS 로 넘기려면 `MAPVALUE(n, param('x') ?? "")` 로 열을 붙여 `column(n)[0]` 으로 읽는다
 - 차트 페이지는 `body` 가 100vh 인데 위 여백이 더해져 늘 스크롤이 생기고 아래가 잘린다. `main.html` 이 같은 출처의 iframe 에 CSS(`FIT_CSS`)를 넣어 틀에 맞춘다.
   범례는 아래(`bottom`)보다 제목 아래(`top`)에 두어야 틀 높이와 상관없이 보인다
+- **질의 결과가 0행이면 `column(n)` 이 아예 없다(undefined).** `column(0).map(…)` 이 오류를 내 차트가 비므로 `(column(0) || [])` 로 쓴다.
+  `MAPVALUE` 로 붙인 인자 열도 0행이면 생기지 않는다. 그리고 `SCRIPT` 가 한 줄도 내보내지 않으면 TQL 은 차트 없이 `{"success":true}` 만 돌려준다 —
+  04·09 는 그럴 때 표시 줄 하나를 내보내 "no run" 제목을 그린다. 새 차트는 빈 기간(`?from=2000-01-01&to=2000-01-02`)으로 꼭 열어 본다
 - 차트를 서버에 두지 않고 미리 보려면 `POST /db/tql` 에 TQL 을 보낸다 — 자산 목록(JSON: `chartID` · `jsAssets` · `jsCodeAssets`)이 오므로 페이지를 조립해 연다
 - 시계를 차지 않은 시간에는 기록이 없다. 02·03 은 30분 넘는 빈틈에서 선을 끊는다 (매끈한 선이 빈 곳에 가짜 곡선을 그린다)
 
@@ -95,8 +97,14 @@ neo 를 OS 와 다른 `TZ` 로 띄우면 시작하지 않는다 (`MACHCLI-ERR-48
 ## 시험
 
 ```bash
-NEO_BIN=/path/to/machbase-neo test/run.sh                          # 모두
-TZ=America/New_York NEO_BIN=… test/run.sh test/test_days.js         # 시간대
+# 저장소 맨 위에서 하나씩 — Windows·macOS·Linux 모두 같다
+machbase-neo jsh test/test_collector.js
+machbase-neo jsh test/test_signin.js
+machbase-neo jsh test/test_days.js
+machbase-neo jsh test/test_sha1.js
+
+# 시간대를 바꿔 보기 (Linux·macOS)
+TZ=America/New_York machbase-neo jsh test/test_days.js
 ```
 
 `test_collector` (실패 경로·받은 날 건너뛰기), `test_signin` (잠금·429·MFA·비밀번호 미저장·로그아웃·만료), `test_days`, `test_sha1`.
