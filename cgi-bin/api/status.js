@@ -4,7 +4,9 @@
  *
  *   signedIn : 토큰 파일이 있는가 (내용은 절대 돌려주지 않는다)
  *   collector: 수집기가 쓰는 data/status.json 그대로
- *   stale    : 예정된 다음 실행(nextTick)이 10분 넘게 지났는데 상태가 그대로면 수집기가 멈춘 것으로 본다
+ *   stale    : 예정된 다음 실행(nextTick)이 10분 넘게 지났는데 상태가 그대로면 수집기가 멈춘 것으로 본다.
+ *              막 시작해 첫 수집 중이면 nextTick 이 아직 없다 — 그때는 마지막으로 쓴 시각(updatedAt)이 30분 넘게 묵었을 때만 멈춘 것으로 본다
+ *              (예전에는 nextTick 이 없으면 바로 stale 이라, Start 직후 사이드 패널이 빨간 "not responding" 이었다)
  *              (수집기는 1시간마다 쓰므로 "10분 동안 안 바뀜" 으로 보면 안 된다)
  *   service  : 서비스 컨트롤러가 아는 상태
  */
@@ -26,7 +28,8 @@ if (!cgi.neoUser(cgi.method() === 'POST' ? cgi.readBody() : {}, paths.neoUrl()))
     const out = {
         signedIn: paths.exists(paths.TOKEN),
         collector: st,
-        stale: !st || !st.nextTick || (Date.now() > Date.parse(st.nextTick) + GRACE_MS),
+        stale: !st || (st.nextTick ? Date.now() > Date.parse(st.nextTick) + GRACE_MS
+                                   : !st.updatedAt || Date.now() > Date.parse(st.updatedAt) + 3 * GRACE_MS),
         service: null,
     };
     try {

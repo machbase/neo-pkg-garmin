@@ -44,7 +44,7 @@ App Store は **machbase-neo を起動したディレクトリ**の `public/` �
 
 ### アンインストール
 
-Garmin のトークンも削除したい場合は、先にアプリで **Sign out** をクリックします。次に App Store で **Uninstall** をクリックすると、収集サービスが停止し登録が削除されます。
+先にサイドパネルの **Stop**(または App Store カードのスイッチをオフ)をクリックします — App Store はサービスが動いているパッケージをアンインストールしません("Stop them first and try again")。Garmin のトークンも削除したい場合は **Sign out** もクリックします。次に App Store で **Uninstall** をクリックします。
 **収集したデータは `GARMIN` データベースに残ります。** 不要であれば SQL で削除します。
 
 ```sql
@@ -59,6 +59,8 @@ DROP DATABASE GARMIN;
 **App Store** で `neo-pkg-garmin` をクリックするとパッケージタブが開きます。サイドパネルに収集状態が表示されます。
 
 ### サインイン
+
+![サインイン画面 — 左のサイドパネルはサインインを待つ収集器](docs/images/sign-in.png)
 
 - Garmin のメールアドレスとパスワードを入力し、Garmin に求められた場合は届いた認証コードを入力します(5 分以内に入力)。
 - **パスワードは保存しません。** HTTPS で Garmin のサインインサーバーにだけ送信します。残るのは Garmin が返すトークンだけで、所有者のみが読めるパーミッションのファイルに保存します(Linux・macOS)。

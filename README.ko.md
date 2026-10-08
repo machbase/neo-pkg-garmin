@@ -44,7 +44,7 @@ App Store 는 **machbase-neo 를 실행한 폴더**의 `public/` 에서 아카�
 
 ### 삭제
 
-Garmin 토큰도 지우려면 먼저 앱에서 **Sign out** 을 누릅니다. 그다음 App Store 에서 **Uninstall** 을 누르면 수집 서비스가 멈추고 등록이 지워집니다.
+먼저 사이드 패널의 **Stop**(또는 App Store 카드의 스위치 끄기)을 누릅니다 — App Store 는 서비스가 돌고 있는 패키지를 지우지 않습니다("Stop them first and try again"). Garmin 토큰도 지우려면 **Sign out** 도 누릅니다. 그다음 App Store 에서 **Uninstall** 을 누릅니다.
 **수집한 데이터는 `GARMIN` 데이터베이스에 남습니다.** 필요 없으면 SQL 로 지웁니다.
 
 ```sql
@@ -59,6 +59,8 @@ DROP DATABASE GARMIN;
 **App Store** 에서 `neo-pkg-garmin` 을 누르면 패키지 탭이 열립니다. 사이드 패널에 수집 상태가 보입니다.
 
 ### 로그인
+
+![로그인 화면 — 왼쪽 사이드 패널은 로그인을 기다리는 수집기](docs/images/sign-in.png)
 
 - Garmin 이메일과 비밀번호를 넣고, Garmin 이 요구하면 받은 인증 코드를 넣습니다 (5분 안에 입력).
 - **비밀번호는 저장하지 않습니다.** HTTPS 로 Garmin 의 로그인 서버에만 보냅니다. 남는 것은 Garmin 이 돌려준 토큰뿐이고, 소유자만 읽을 수 있는 권한의 파일에 저장합니다 (Linux·macOS).

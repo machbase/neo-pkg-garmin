@@ -44,7 +44,7 @@ Installation fails if `public/` contains two archives with the same package name
 
 ### Uninstalling
 
-Click **Sign out** in the app first if you want the Garmin token deleted. Then click **Uninstall** in the App Store to stop the collection service and remove its registration.
+First click **Stop** in the side panel (or turn off the App Store card switch) — the App Store does not uninstall a package whose service is still running ("Stop them first and try again"). Click **Sign out** too if you want the Garmin token deleted. Then click **Uninstall** in the App Store.
 **Collected data remains** in the `GARMIN` database. If you no longer need it, drop it with SQL:
 
 ```sql
@@ -59,6 +59,8 @@ DROP DATABASE GARMIN;
 Open the **App Store**, click `neo-pkg-garmin`, and the package tab opens. The side panel shows collection status.
 
 ### Sign in
+
+![Sign-in screen — the side panel on the left shows the collector waiting for sign-in](docs/images/sign-in.png)
 
 - Enter your Garmin email and password, then the verification code if Garmin asks for one (enter it within 5 minutes).
 - **Your password is never stored.** It is sent over HTTPS only to Garmin's sign-in server. What remains is the token Garmin returns, saved in a file with owner-only permissions (on Linux and macOS).

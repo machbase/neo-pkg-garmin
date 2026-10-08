@@ -29,7 +29,9 @@ const BACKFILL_DAYS = 365            // 최대 1년까지 거슬러 간다
 // 가민의 하루는 사용자의 현지 날짜다. neo 서버의 시간대로 센다 (days.js)
 const ymd = days.ymd
 
-const status = { state: "starting", startedAt: new Date().toISOString(), lastTick: null, lastOk: null, backfilled: 0, pastDay: null, error: null }
+// 마지막 수집 시각은 다시 시작해도 이어 간다 — 사이드 패널의 "Last collected" 가 재시작마다 비지 않게
+const prev = paths.readJson(paths.STATUS) || {}
+const status = { state: "starting", startedAt: new Date().toISOString(), lastTick: null, lastOk: prev.lastOk || null, backfilled: 0, pastDay: null, error: null }
 function writeStatus(patch) {
   Object.assign(status, patch || {}, { updatedAt: new Date().toISOString() })
   try { fs.mkdir(paths.DATA_DIR) } catch (e) { /* 이미 있다 */ }
