@@ -44,14 +44,17 @@ CHART(
       })
     })
     const lower = pairs.filter(function (p) { return p[1].run_hr < p[0].run_hr }).length
-    // 왼쪽 글자는 표처럼 세 칸 — 앞 러닝 날짜(주황) · 뒤 러닝 날짜(파랑) · 거리. 색을 점과 맞춰 어느 날짜가 어느 점인지 보이게 한다
+    // 왼쪽 글자는 표처럼 네 칸 — 앞 러닝 날짜(주황) · 뒤 러닝 날짜(파랑) · 거리 · 1km 페이스. 색을 점과 맞춰 어느 날짜가 어느 점인지 보이게 한다
     // (두 날짜와 거리를 한 줄로 이어 쓰면 알아보기 어렵다). 칸 이름은 y 축 이름으로 맨 위에 둔다
+    // 페이스는 두 러닝이 ±10초 안이라 둘의 평균 하나만 적는다
     const fmt = function (d) { return MON[Number(d.slice(5, 7)) - 1] + " " + Number(d.slice(8)) + ", " + d.slice(0, 4) }
+    const mmss = function (s) { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") }
+    const pace = function (p) { return mmss((p[0].run_pace + p[1].run_pace) / 2) + " /km" }
     const rows = pairs.map(function (p, i) { return String(i) })   // 칸 값은 쌍 번호, 글자는 formatter 가 만든다
     const cell = function (c) { return { width: c[0], align: c[1], color: c[2], fontSize: 14 } }
-    const RICH = { e: cell([104, "left", "#e8743b"]), l: cell([104, "left", "#2f6fdb"]), k: cell([56, "right", "#555"]) }
-    const HEAD = { e: cell([104, "left", "#888"]), l: cell([104, "left", "#888"]), k: cell([56, "right", "#888"]) }
-    const describe = function (i) { const p = pairs[i]; return fmt(p[0].day) + " → " + fmt(p[1].day) + " · " + (p[0].dist / 1000).toFixed(1) + " km" }
+    const RICH = { e: cell([104, "left", "#e8743b"]), l: cell([104, "left", "#2f6fdb"]), k: cell([56, "right", "#555"]), p: cell([80, "right", "#555"]) }
+    const HEAD = { e: cell([104, "left", "#888"]), l: cell([104, "left", "#888"]), k: cell([56, "right", "#888"]), p: cell([80, "right", "#888"]) }
+    const describe = function (i) { const p = pairs[i]; return fmt(p[0].day) + " → " + fmt(p[1].day) + " · " + (p[0].dist / 1000).toFixed(1) + " km · " + pace(p) }
     return {
       title: { text: pairs.length ? lower + " of " + pairs.length + " Similar Pairs: Lower Heart Rate on the Later Run" : "No Similar Run Pairs Yet",
                subtext: "Earlier: " + mY(EARLY[0]) + " – " + mY(EARLY[1] - 1) + " · Later: " + mY(LATE[0]) + " – " + mY(LATE[1] - 1) + " · distance within ±10% · pace within ±10 s/km · arrow = earlier → later" },
@@ -61,12 +64,12 @@ CHART(
                  fill: "#666", font: "15px sans-serif", textAlign: "center", lineHeight: 24 } }],
       tooltip: { trigger: "item", formatter: function (x) { return describe(Number(x.value[1])) + "<br>" + x.seriesName + " · " + x.value[0] + " bpm" } },
       legend: { top: 58, left: 5, textStyle: { fontSize: 13 }, data: ["Earlier run", "Later run"] },
-      grid: { top: 130, left: 300, right: 80, bottom: 40 },
+      grid: { top: 130, left: 384, right: 80, bottom: 40 },
       xAxis: { type: "value", name: "avg bpm", min: 120, max: 160 },
       yAxis: { type: "category", data: rows, inverse: true,
-               name: "{e|Earlier run}{l|Later run}{k|Distance}", nameLocation: "start", nameGap: 14,
+               name: "{e|Earlier run}{l|Later run}{k|Distance}{p|Avg pace}", nameLocation: "start", nameGap: 14,
                nameTextStyle: { align: "right", padding: [0, 8, 0, 0], rich: HEAD },
-               axisLabel: { formatter: function (v) { const p = pairs[Number(v)]; return "{e|" + fmt(p[0].day) + "}{l|" + fmt(p[1].day) + "}{k|" + (p[0].dist / 1000).toFixed(1) + " km}" }, rich: RICH } },
+               axisLabel: { formatter: function (v) { const p = pairs[Number(v)]; return "{e|" + fmt(p[0].day) + "}{l|" + fmt(p[1].day) + "}{k|" + (p[0].dist / 1000).toFixed(1) + " km}{p|" + pace(p) + "}" }, rich: RICH } },
       series: [
         { name: "Earlier run", type: "scatter", symbolSize: 16, itemStyle: { color: "#e8743b" },
           // 숫자는 두 점의 바깥쪽에 적는다 (보통 앞쪽 심박이 높아 오른쪽에 온다)
